@@ -1,11 +1,14 @@
 """Analysis routes: run transcription + metrics for a session."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.database.engine import get_db
 from app.models.feedback import AIFeedback
@@ -80,25 +83,33 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 posture_quality=float(combined["posture_quality"]),
             )
 
-        # 4. AI feedback
+        # 4. AI feedback — upsert to avoid duplicate rows on re-analysis
         feedback_payload = generate_feedback(combined, transcription_text)
-        feedback_row = AIFeedback(
-            session_id=session.id,
-            feedback_type="overall",
-            content=str(feedback_payload["content"]),
-            score=float(feedback_payload["score"]),
-            suggestions=list(feedback_payload["suggestions"]),
+        existing_feedback = next(
+            (f for f in session.feedback if f.feedback_type == "overall"), None
         )
-        db.add(feedback_row)
+        if existing_feedback:
+            existing_feedback.content = str(feedback_payload["content"])
+            existing_feedback.score = float(feedback_payload["score"])
+            existing_feedback.suggestions = list(feedback_payload["suggestions"])
+        else:
+            db.add(AIFeedback(
+                session_id=session.id,
+                feedback_type="overall",
+                content=str(feedback_payload["content"]),
+                score=float(feedback_payload["score"]),
+                suggestions=list(feedback_payload["suggestions"]),
+            ))
 
         session.status = "completed"
         db.commit()
         db.refresh(session)
         return SessionDetailOut.model_validate(session)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Analysis failed for session %s", session_id)
         session.status = "failed"
         db.commit()
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
 
 
 @router.get("/{session_id}/analysis", response_model=SessionAnalysisOut)

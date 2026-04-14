@@ -16,13 +16,13 @@ class Settings(BaseSettings):
     # App
     app_name: str = "SpeakFlow API"
     app_version: str = "0.1.0"
-    debug: bool = True
+    debug: bool = False
 
     # Database
     database_url: str = f"sqlite:///{BASE_DIR / 'speakflow.db'}"
 
-    # Security
-    secret_key: str = "change-me-in-production-please-use-a-long-random-string"
+    # Security — must be set via SECRET_KEY env var; no insecure default
+    secret_key: str = "CHANGE_ME_SET_SECRET_KEY_ENV_VAR_IN_PRODUCTION"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
 

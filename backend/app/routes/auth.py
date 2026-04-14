@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
@@ -76,7 +76,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
 
 
 @router.get("/me", response_model=UserOut)
-def me(authorization: Optional[str] = None, db: Session = Depends(get_db)) -> UserOut:
+def me(authorization: Optional[str] = Header(default=None), db: Session = Depends(get_db)) -> UserOut:
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     token = authorization.split(" ", 1)[1]

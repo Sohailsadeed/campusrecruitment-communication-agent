@@ -118,19 +118,30 @@ def transcribe_audio(
 
                 transcript_parts: List[str] = []
                 extracted_words: List[Dict[str, Any]] = []
+                extracted_segments: List[Dict[str, Any]] = []
 
-                for seg in segments:
+                for idx, seg in enumerate(segments):
                     transcript_parts.append(seg.text)
+                    seg_words: List[Dict[str, Any]] = []
                     if hasattr(seg, "words") and seg.words:
                         for w in seg.words:
-                            extracted_words.append(
-                                {
-                                    "word": w.word.strip(),
-                                    "start": round(w.start, 2),
-                                    "end": round(w.end, 2),
-                                    "probability": round(w.probability, 2),
-                                }
-                            )
+                            w_dict = {
+                                "word": w.word.strip(),
+                                "start": round(w.start, 2),
+                                "end": round(w.end, 2),
+                                "probability": round(w.probability, 2),
+                            }
+                            extracted_words.append(w_dict)
+                            seg_words.append(w_dict)
+                    extracted_segments.append(
+                        {
+                            "id": idx + 1,
+                            "start": round(seg.start, 2),
+                            "end": round(seg.end, 2),
+                            "text": seg.text.strip(),
+                            "words": seg_words,
+                        }
+                    )
 
                 full_text = " ".join(transcript_parts).strip()
                 pause_info = _calculate_pauses(extracted_words)
@@ -140,6 +151,7 @@ def transcribe_audio(
                     "language": getattr(info, "language", "en"),
                     "confidence": 0.94,
                     "words": extracted_words,
+                    "segments": extracted_segments,
                     **pause_info,
                 }
             except Exception as exc:
@@ -161,21 +173,33 @@ def transcribe_audio(
                 )
                 full_text = str(result.get("text", "")).strip()
                 extracted_words = []
-                for seg in result.get("segments", []):
+                extracted_segments = []
+                for idx, seg in enumerate(result.get("segments", [])):
+                    seg_words = []
                     for w in seg.get("words", []):
-                        extracted_words.append(
-                            {
-                                "word": str(w.get("word", "")).strip(),
-                                "start": round(float(w.get("start", 0)), 2),
-                                "end": round(float(w.get("end", 0)), 2),
-                            }
-                        )
+                        w_dict = {
+                            "word": str(w.get("word", "")).strip(),
+                            "start": round(float(w.get("start", 0)), 2),
+                            "end": round(float(w.get("end", 0)), 2),
+                        }
+                        extracted_words.append(w_dict)
+                        seg_words.append(w_dict)
+                    extracted_segments.append(
+                        {
+                            "id": idx + 1,
+                            "start": round(float(seg.get("start", 0.0)), 2),
+                            "end": round(float(seg.get("end", 0.0)), 2),
+                            "text": str(seg.get("text", "")).strip(),
+                            "words": seg_words,
+                        }
+                    )
                 pause_info = _calculate_pauses(extracted_words)
                 return {
                     "text": full_text,
                     "language": str(result.get("language", "en")),
                     "confidence": 0.90,
                     "words": extracted_words,
+                    "segments": extracted_segments,
                     **pause_info,
                 }
             except Exception as exc:
@@ -187,12 +211,29 @@ def transcribe_audio(
     text = rng.choice(MOCK_TRANSCRIPTS)
     mock_words = []
     t = 0.0
-    for w in text.split():
-        d = rng.uniform(0.2, 0.4)
-        mock_words.append({"word": w, "start": round(t, 2), "end": round(t + d, 2)})
-        # occasional pause
-        pause_gap = rng.choice([0.1, 0.1, 0.6, 0.8])
-        t += d + pause_gap
+    sentences = [s.strip() for s in text.split(".") if s.strip()]
+    mock_segments = []
+
+    for s_idx, sent in enumerate(sentences):
+        sent_start = t
+        seg_words = []
+        for w in sent.split():
+            d = rng.uniform(0.2, 0.4)
+            w_dict = {"word": w, "start": round(t, 2), "end": round(t + d, 2)}
+            mock_words.append(w_dict)
+            seg_words.append(w_dict)
+            pause_gap = rng.choice([0.1, 0.1, 0.6, 0.8])
+            t += d + pause_gap
+        sent_end = round(t, 2)
+        mock_segments.append(
+            {
+                "id": s_idx + 1,
+                "start": round(sent_start, 2),
+                "end": sent_end,
+                "text": sent + ".",
+                "words": seg_words,
+            }
+        )
 
     pause_info = _calculate_pauses(mock_words)
     return {
@@ -200,5 +241,7 @@ def transcribe_audio(
         "language": "en",
         "confidence": 0.88,
         "words": mock_words,
+        "segments": mock_segments,
         **pause_info,
     }
+

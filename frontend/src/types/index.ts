@@ -37,6 +37,34 @@ export interface FillerTimelineItem {
   level: string;
 }
 
+export interface MultimodalUtterance {
+  utterance_id: number;
+  start: number;
+  end: number;
+  transcript: string;
+  face?: {
+    dominant_expression?: string;
+    eyebrow_action?: string;
+    eye_contact_ratio?: number;
+    head_motion?: string;
+  };
+  gesture?: {
+    posture?: string;
+    events?: string[];
+  };
+}
+
+export interface CongruenceAnalysis {
+  status: string;
+  analysis: string;
+}
+
+export interface AvatarReaction {
+  expression: string;
+  gesture: string;
+  timing?: string;
+}
+
 export interface VerbalIQReport {
   total_score: number;
   verdict: string;
@@ -48,12 +76,18 @@ export interface VerbalIQReport {
   curated_drills?: CuratedDrill[];
   cadence_sparkline?: number[];
   filler_timeline?: FillerTimelineItem[];
+  multimodal_timeline?: MultimodalUtterance[];
+  congruence?: CongruenceAnalysis;
+  avatar_reaction?: AvatarReaction;
+  nonverbal_summary?: Record<string, any>;
   metrics?: {
     speaking_pace: number;
     filler_words_count: number;
     total_pause_time: number;
     pause_count: number;
     repetitions_count: number;
+    eye_contact_percentage?: number;
+    posture_quality?: number;
   };
 }
 

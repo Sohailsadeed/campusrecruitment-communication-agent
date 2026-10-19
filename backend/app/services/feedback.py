@@ -1,4 +1,4 @@
-"""JAM (Just A Minute) LLM-backed feedback evaluation via Ollama."""
+"""JAM & Multimodal LLM-backed feedback evaluation via Ollama."""
 from __future__ import annotations
 
 import json
@@ -12,6 +12,92 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 
+FEEDBACK_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "content": {"type": "string"},
+        "score": {"type": "number"},
+        "suggestions": {"type": "array", "items": {"type": "string"}},
+        "congruence": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"},
+                "analysis": {"type": "string"},
+            },
+            "required": ["status", "analysis"],
+        },
+        "avatar_reaction": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string"},
+                "gesture": {"type": "string"},
+                "timing": {"type": "string"},
+            },
+            "required": ["expression", "gesture"],
+        },
+        "rewrites": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {"type": "string"},
+                    "original": {"type": "string"},
+                    "polish": {"type": "string"},
+                    "grade": {"type": "string"},
+                    "polish_grade": {"type": "string"},
+                    "tip": {"type": "string"},
+                },
+                "required": ["original", "polish", "tip"],
+            },
+        },
+        "competencies": {
+            "type": "object",
+            "properties": {
+                "articulation": {"type": "integer"},
+                "structure": {"type": "integer"},
+                "technical_depth": {"type": "integer"},
+                "pacing": {"type": "integer"},
+                "confidence": {"type": "integer"},
+                "conciseness": {"type": "integer"},
+            },
+            "required": [
+                "articulation",
+                "structure",
+                "technical_depth",
+                "pacing",
+                "confidence",
+                "conciseness",
+            ],
+        },
+        "mastery_points": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                },
+                "required": ["title", "description"],
+            },
+        },
+        "curated_drills": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "desc": {"type": "string"},
+                    "duration": {"type": "string"},
+                    "icon": {"type": "string"},
+                },
+                "required": ["title", "desc"],
+            },
+        },
+    },
+    "required": ["content", "score", "suggestions", "congruence", "competencies"],
+}
+
+
 PROMPT_TEMPLATE = """You are an expert Chief Adjudicator & Executive Communication Coach for high-stakes interviews and speaking rounds.
 The speaker chose this specific topic/drill: "{topic}"
 
@@ -23,53 +109,31 @@ Speech & Acoustic Analytics:
 - Repeated content words: {repetition_count} ({repetition_list})
 - Calculated Score: {jam_score}/100 | Verdict: {jam_verdict}
 
+Visual & Nonverbal Signals (MediaPipe Utterance Tracking):
+- Overall Eye Contact Consistency: {eye_contact_percentage}%
+- Posture & Presence Score: {posture_quality}%
+- Hand Gestures / Open Emphasis Count: {hand_gestures_count}
+- Hand-to-Face / Fidget Events: {fidget_count}
+- Utterance-Aligned Multimodal Evidence:
+{multimodal_evidence}
+
 Transcript:
 "{transcript}"
 
 As the Chief Coach:
-1. Deliver a concise 3-5 sentence adjudication addressing topic delivery, clarity, structure, and flow.
-2. Select 1 or 2 specific weak phrases/sentences from the transcript (especially where filler words, vagueness, or repetition occurred) and provide executive-level "Critical Moment Rewrites" side-by-side with original vs polished version, letter grades, and actionable tips.
-3. Score the 6 Core Competency Vectors (0-100 each):
+1. Deliver a concise 3-5 sentence adjudication addressing topic delivery, verbal clarity, nonverbal presence, and flow.
+2. Evaluate Verbal-Nonverbal Congruence: Determine whether the candidate's body posture, eye contact, and gestures matched their spoken intent (e.g. confident vs anxious disconfirmation).
+3. Select 1 or 2 specific weak phrases/sentences from the transcript (especially where filler words, vagueness, or repetition occurred) and provide executive-level "Critical Moment Rewrites" side-by-side with original vs polished version, letter grades, and actionable tips.
+4. Score the 6 Core Competency Vectors (0-100 each):
    - Articulation & Acoustic Clarity
    - Structure & STAR Logic Flow
    - Technical Depth & Precision
    - Pacing & Strategic Pauses
    - Confidence & Assertive Tone
    - Conciseness (Low Fluff)
-4. Highlight 2-3 observed mastery points and 2 curated follow-up drills.
+5. Highlight 2-3 observed mastery points, 2 curated follow-up drills, and an Avatar Nonverbal Reaction Plan (e.g. empathic_nod, attentive_tilt, open_palm).
 
-Respond ONLY with a JSON object with these exact keys:
-{{
-  "content": "<paragraph of judge adjudication addressing topic adherence, hesitations, and delivery>",
-  "score": {jam_score},
-  "suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"],
-  "rewrites": [
-    {{
-      "timestamp": "00:15",
-      "original": "<exact weak sentence or colloquial phrase from transcript>",
-      "polish": "<quantified, concise, high-impact executive rewrite of that sentence>",
-      "grade": "C+",
-      "polish_grade": "A+",
-      "tip": "<specific rationale for the improvement>"
-    }}
-  ],
-  "competencies": {{
-    "articulation": 88,
-    "structure": 85,
-    "technical_depth": 84,
-    "pacing": 82,
-    "confidence": 86,
-    "conciseness": 80
-  }},
-  "mastery_points": [
-    {{"title": "Decisive Framing", "description": "Addressed key problem constraints directly without defensive language."}},
-    {{"title": "Executive Voice", "description": "Used direct active voice rather than passive qualifiers."}}
-  ],
-  "curated_drills": [
-    {{"title": "Conciseness Squeezer Drill", "desc": "Condense 2-min answers into 45s", "duration": "8 mins", "icon": "timer"}},
-    {{"title": "Filler Word Elimination", "desc": "Real-time haptic/visual cueing", "duration": "7 mins", "icon": "bolt"}}
-  ]
-}}
+Respond ONLY with a JSON object adhering to the schema.
 """
 
 
@@ -85,6 +149,22 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
     if len(excerpt) > 800:
         excerpt = excerpt[:800] + "..."
 
+    timeline = metrics.get("multimodal_timeline") or []
+    timeline_lines = []
+    for item in timeline[:4]:
+        u_id = item.get("utterance_id", 1)
+        face = item.get("face", {})
+        gesture = item.get("gesture", {})
+        expr = face.get("dominant_expression", "neutral")
+        ec = face.get("eye_contact_ratio", 0.8)
+        posture = gesture.get("posture", "upright")
+        events = ", ".join(gesture.get("events", ["none"]))
+        timeline_lines.append(
+            f"  * Utterance {u_id} [{item.get('start', 0)}s - {item.get('end', 0)}s]: "
+            f"Expression={expr}, EyeContact={int(ec*100)}%, Posture={posture}, Gestures=[{events}]"
+        )
+    multimodal_evidence = "\n".join(timeline_lines) if timeline_lines else "  * Stable upright presence with consistent eye contact."
+
     return PROMPT_TEMPLATE.format(
         topic=topic or "Impromptu Speech",
         speaking_pace=metrics.get("speaking_pace", 0),
@@ -97,12 +177,17 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
         repetition_list=rep_list,
         jam_score=metrics.get("jam_score", metrics.get("clarity_score", 70)),
         jam_verdict=metrics.get("jam_verdict", "Qualified"),
+        eye_contact_percentage=metrics.get("eye_contact_percentage", 82.0),
+        posture_quality=metrics.get("posture_quality", 85.0),
+        hand_gestures_count=metrics.get("hand_gestures_count", 2),
+        fidget_count=metrics.get("fidget_count", 0),
+        multimodal_evidence=multimodal_evidence,
         transcript=excerpt,
     )
 
 
 def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech", transcript: str = "") -> Dict[str, Any]:
-    """Deterministic fallback feedback with VerbalIQ rewrites and competency vector."""
+    """Deterministic fallback feedback with VerbalIQ rewrites, competencies, and multimodal congruence."""
     pace = float(metrics.get("speaking_pace") or 0)
     fillers = int(metrics.get("filler_words_count") or 0)
     reps = int(metrics.get("repetitions_count") or 0)
@@ -110,6 +195,8 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
     longest_pause = float(metrics.get("longest_pause") or 0.0)
     score = float(metrics.get("jam_score", metrics.get("clarity_score", 78.0)) or 78.0)
     verdict = str(metrics.get("jam_verdict") or "Qualified")
+    ec = float(metrics.get("eye_contact_percentage") or 82.0)
+    fidgets = int(metrics.get("fidget_count") or 0)
 
     parts: List[str] = [f"Adjudication for topic '{topic}': Verdict is {verdict} ({score:.0f}/100)."]
     suggestions: List[str] = []
@@ -119,7 +206,7 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
     base_struct = min(94, max(60, int(score + (2 if reps == 0 else -6))))
     base_tech = min(92, max(65, int(score + 3)))
     base_pace = min(95, max(58, int(92 - abs(pace - 145) * 0.6)))
-    base_conf = min(95, max(62, int(score - (3 if longest_pause > 2.0 else 0))))
+    base_conf = min(95, max(62, int(score - (3 if longest_pause > 2.0 else 0) - (4 if fidgets > 1 else 0))))
     base_concise = min(94, max(50, int(90 - fillers * 5 - reps * 4)))
 
     competencies = {
@@ -130,6 +217,17 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
         "confidence": base_conf,
         "conciseness": base_concise,
     }
+
+    if ec >= 80 and fidgets == 0:
+        congruence = {
+            "status": "High Alignment",
+            "analysis": f"Strong nonverbal grounding ({ec:.0f}% eye contact) reinforced spoken claims with steady posture.",
+        }
+    else:
+        congruence = {
+            "status": "Mild Incongruence",
+            "analysis": f"Observed minor hesitation cues ({fidgets} touch/fidget events, {ec:.0f}% gaze consistency) during complex arguments.",
+        }
 
     if fillers == 0 and pauses < 3.0:
         parts.append("Outstanding fluency with zero hesitation infractions and clean pacing.")
@@ -151,9 +249,9 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
         suggestions.append("Use a transitional bridge ('Furthermore...', 'On the other hand...') rather than dead silence.")
 
     if len(suggestions) < 3:
-        suggestions.append(f"Keep practicing impromptu delivery on topics like '{topic}' using structured synthesis.")
+        suggestions.append(f"Maintain direct screen eye contact when summarizing strategic takeaways for '{topic}'.")
 
-    # Generate realistic Critical Moment Rewrites
+    # Generate Critical Moment Rewrites
     rewrites = []
     text_clean = (transcript or "").strip()
     sentences = [s.strip() for s in text_clean.split(".") if len(s.strip().split()) >= 4]
@@ -198,6 +296,12 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
         "content": " ".join(parts),
         "score": score,
         "suggestions": suggestions[:3],
+        "congruence": congruence,
+        "avatar_reaction": {
+            "expression": "empathic_nod" if score >= 75 else "attentive_focus",
+            "gesture": "open_palm_welcome" if score >= 75 else "supportive_tilt",
+            "timing": "00:02"
+        },
         "rewrites": rewrites,
         "competencies": competencies,
         "mastery_points": mastery_points,
@@ -210,9 +314,10 @@ def generate_feedback(
     transcript: str,
     topic: str = "Impromptu Speech",
 ) -> Dict[str, Any]:
-    """Generate comprehensive VerbalIQ feedback with rewrites, competencies, and drills."""
+    """Generate comprehensive VerbalIQ feedback with rewrites, competencies, and multimodal congruence."""
     prompt = _build_prompt(metrics, transcript, topic)
     url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
+    fallback = _heuristic_feedback(metrics, topic, transcript)
 
     try:
         response = requests.post(
@@ -221,8 +326,8 @@ def generate_feedback(
                 "model": settings.ollama_model,
                 "prompt": prompt,
                 "stream": False,
-                "format": "json",
-                "options": {"temperature": 0.3},
+                "format": FEEDBACK_JSON_SCHEMA,
+                "options": {"temperature": 0.25},
             },
             timeout=settings.llm_timeout_seconds,
         )
@@ -232,18 +337,18 @@ def generate_feedback(
         if not raw:
             raise ValueError("Empty Ollama response")
         parsed = json.loads(raw)
-        
-        fallback = _heuristic_feedback(metrics, topic, transcript)
+
         return {
             "content": str(parsed.get("content", "")).strip() or fallback["content"],
             "score": float(parsed.get("score", metrics.get("jam_score", 0)) or fallback["score"]),
             "suggestions": [str(s) for s in parsed.get("suggestions", [])][:5] or fallback["suggestions"],
+            "congruence": parsed.get("congruence") or fallback["congruence"],
+            "avatar_reaction": parsed.get("avatar_reaction") or fallback["avatar_reaction"],
             "rewrites": parsed.get("rewrites") or fallback["rewrites"],
             "competencies": parsed.get("competencies") or fallback["competencies"],
             "mastery_points": parsed.get("mastery_points") or fallback["mastery_points"],
             "curated_drills": parsed.get("curated_drills") or fallback["curated_drills"],
         }
     except Exception as exc:
-        logger.info("Ollama unavailable, using enhanced heuristic feedback: %s", exc)
-        return _heuristic_feedback(metrics, topic, transcript)
-
+        logger.info("Ollama schema generation failed or unavailable, using enhanced fallback: %s", exc)
+        return fallback

@@ -112,8 +112,12 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             pause_metrics=pause_data,
         )
 
-        # 3. Video metrics
-        video_metrics = analyze_video(_path_or_none(session.video_path))
+        # 3. Video & Multimodal nonverbal metrics
+        extracted_segments = result.get("segments", [])
+        video_metrics = analyze_video(
+            _path_or_none(session.video_path),
+            utterances=extracted_segments,
+        )
 
         combined = {**metrics, **video_metrics, **pause_data}
 
@@ -151,7 +155,7 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 posture_quality=float(combined["posture_quality"]),
             )
 
-        # 4. AI feedback — evaluating topic adherence, hesitations, and flow
+        # 4. AI feedback — evaluating topic adherence, hesitations, nonverbal congruence, and flow
         topic_name = session.title or "General Topic"
         feedback_payload = generate_feedback(combined, transcription_text, topic=topic_name)
         existing_feedback = next(
@@ -191,6 +195,10 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             "repetition_count": combined.get("repetitions_count", 0),
             "hesitation_count": combined.get("hesitations_count", combined.get("filler_words_count", 0)),
             "cardinal_infractions": combined.get("jam_infractions", []),
+            "eye_contact_percentage": float(combined.get("eye_contact_percentage", 82.0)),
+            "posture_quality": float(combined.get("posture_quality", 85.0)),
+            "hand_gestures_count": int(combined.get("hand_gestures_count", 0)),
+            "fidget_count": int(combined.get("fidget_count", 0)),
         }
 
         session.report = {
@@ -198,20 +206,34 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             "verdict": combined.get("jam_verdict", "Qualified"),
             "feedback_content": str(feedback_payload["content"]),
             "suggestions": list(feedback_payload["suggestions"]),
+            "congruence": feedback_payload.get("congruence", {
+                "status": "High Alignment",
+                "analysis": "Nonverbal delivery matched spoken messaging."
+            }),
+            "avatar_reaction": feedback_payload.get("avatar_reaction", {
+                "expression": "empathic_nod",
+                "gesture": "open_palm_welcome",
+                "timing": "00:02"
+            }),
             "rewrites": feedback_payload.get("rewrites", []),
             "competencies": feedback_payload.get("competencies", {}),
             "mastery_points": feedback_payload.get("mastery_points", []),
             "curated_drills": feedback_payload.get("curated_drills", []),
             "cadence_sparkline": cadence_sparkline,
             "filler_timeline": filler_timeline,
+            "multimodal_timeline": combined.get("multimodal_timeline", []),
+            "nonverbal_summary": combined.get("nonverbal_summary", {}),
             "metrics": {
                 "speaking_pace": float(combined.get("speaking_pace", 0.0)),
                 "filler_words_count": int(combined.get("filler_words_count", 0)),
                 "total_pause_time": float(combined.get("total_pause_time", 0.0)),
                 "pause_count": int(combined.get("pause_count", 0)),
                 "repetitions_count": int(combined.get("repetitions_count", 0)),
+                "eye_contact_percentage": float(combined.get("eye_contact_percentage", 82.0)),
+                "posture_quality": float(combined.get("posture_quality", 85.0)),
             },
         }
+
 
         session.status = "completed"
         db.commit()

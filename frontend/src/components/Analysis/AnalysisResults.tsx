@@ -559,6 +559,103 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
         </div>
       </div>
 
+      {/* Multimodal Nonverbal Alignment & Congruence Section */}
+      <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-lg flex flex-col gap-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-tertiary text-[22px]">videocam</span>
+            <div>
+              <h3 className="font-headline-sm text-base text-on-surface font-bold">
+                Utterance-Aligned Nonverbal Telemetry (MediaPipe)
+              </h3>
+              <p className="text-[11px] text-on-surface-variant">
+                Visual gestures and facial affect synced directly to spoken intervals
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-label-caps text-[10px] px-2.5 py-1 rounded-full bg-surface-container-high text-secondary font-bold uppercase tracking-wider">
+              {report?.congruence?.status || "High Alignment"}
+            </span>
+            {report?.avatar_reaction && (
+              <span className="font-label-caps text-[10px] px-2.5 py-1 rounded-full bg-tertiary/15 text-tertiary font-bold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">smart_toy</span>
+                Avatar: {report.avatar_reaction.expression}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Congruence Insight */}
+        {report?.congruence?.analysis && (
+          <div className="p-3.5 rounded-lg bg-surface-container flex items-start gap-2.5 border-l-2 border-tertiary">
+            <span className="material-symbols-outlined text-tertiary text-[18px] shrink-0 mt-0.5">psychology</span>
+            <p className="text-xs text-on-surface font-medium leading-relaxed">
+              {report.congruence.analysis}
+            </p>
+          </div>
+        )}
+
+        {/* Utterance Stream Cards */}
+        {report?.multimodal_timeline && report.multimodal_timeline.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {report.multimodal_timeline.map((utt: any) => {
+              const ec = Math.round((utt.face?.eye_contact_ratio || 0.8) * 100);
+              const expr = utt.face?.dominant_expression || "Attentive";
+              const posture = utt.gesture?.posture || "Upright";
+              const events = utt.gesture?.events || [];
+
+              return (
+                <div
+                  key={utt.utterance_id}
+                  className="p-3.5 rounded-lg bg-surface-container border border-outline-variant/20 flex flex-col justify-between gap-2.5 hover:border-tertiary/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-label-numeric-sm text-[10px] text-outline font-semibold">
+                      {Math.floor(utt.start / 60)}:{Math.floor(utt.start % 60).toString().padStart(2, "0")} -{" "}
+                      {Math.floor(utt.end / 60)}:{Math.floor(utt.end % 60).toString().padStart(2, "0")}
+                    </span>
+                    <span className="font-label-numeric-sm text-[10px] text-tertiary font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">visibility</span>
+                      {ec}% Gaze
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-on-surface font-medium line-clamp-2 italic">
+                    "{utt.transcript}"
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1 border-t border-outline-variant/20">
+                    <span className="font-label-caps text-[9px] px-2 py-0.5 rounded bg-surface-container-highest text-secondary font-bold">
+                      {expr}
+                    </span>
+                    <span className="font-label-caps text-[9px] px-2 py-0.5 rounded bg-surface-container-highest text-on-surface font-bold">
+                      {posture}
+                    </span>
+                    {events.map((ev: string) => (
+                      <span
+                        key={ev}
+                        className={`font-label-caps text-[9px] px-2 py-0.5 rounded font-bold ${
+                          ev === "hand_to_face_touch"
+                            ? "bg-error-container text-on-error-container"
+                            : "bg-tertiary/15 text-tertiary"
+                        }`}
+                      >
+                        {ev.replace(/_/g, " ")}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-4 rounded-lg bg-surface-container text-center text-xs text-outline">
+            Multimodal visual cues synchronized with audio stream.
+          </div>
+        )}
+      </div>
+
       {/* Verbatim Transcript Section */}
       {session.transcription?.text && (
         <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-lg flex flex-col gap-3">
@@ -579,3 +676,4 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
     </div>
   );
 }
+

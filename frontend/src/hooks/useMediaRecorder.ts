@@ -70,6 +70,10 @@ export function useMediaRecorder(): UseMediaRecorderResult {
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      setStream(null);
     };
     recorderRef.current = recorder;
     recorder.start(250);

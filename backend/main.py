@@ -6,7 +6,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database.engine import Base, engine
+from app.database.engine import Base, check_and_apply_migrations, engine
 from app.models import AIFeedback, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
 from app.routes import analysis, auth, feedback, progress, sessions
 from config import settings
@@ -33,17 +33,23 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Core & Round Routers
     app.include_router(auth.router)
     app.include_router(sessions.router)
     app.include_router(analysis.router)
     app.include_router(feedback.router)
     app.include_router(progress.router)
 
+    # Modular Round Routers (Blueprint alignment)
+    app.include_router(sessions.router, prefix="/api/jam", tags=["JAM Round"])
+    app.include_router(analysis.router, prefix="/api/jam", tags=["JAM Round"])
+
     @app.on_event("startup")
     def on_startup() -> None:
-        logger.info("Creating database tables")
+        logger.info("Creating database tables and applying migrations")
         Base.metadata.create_all(bind=engine)
-        logger.info("SpeakFlow API ready")
+        check_and_apply_migrations()
+        logger.info("SpeakFlow API ready with multi-round database schema")
 
     @app.get("/")
     def root() -> dict:

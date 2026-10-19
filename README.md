@@ -12,7 +12,7 @@ turn all of that into encouraging, actionable coaching.
 - **Backend**: FastAPI, SQLAlchemy 2.0, SQLite, Pydantic v2,
   OpenAI Whisper (optional), MediaPipe (optional)
 - **AI**: Local LLM served by [Ollama](https://ollama.com) (defaults to
-  `llama3.2`)
+  `qwen3.5:4b`)
 
 ## Project layout
 

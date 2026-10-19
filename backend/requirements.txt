@@ -7,7 +7,7 @@ python-multipart==0.0.6
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 openai-whisper==20231117
-mediapipe==0.10.8
+mediapipe==0.10.13
 requests==2.31.0
 aiofiles==23.2.1
 ffmpeg-python==0.2.0

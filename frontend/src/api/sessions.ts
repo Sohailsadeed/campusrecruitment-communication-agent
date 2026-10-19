@@ -19,6 +19,8 @@ export interface UploadSessionInput {
   title: string;
   description?: string;
   durationSeconds: number;
+  roundType?: string;
+  roundMetadata?: Record<string, any>;
   videoBlob?: Blob;
   audioBlob?: Blob;
 }
@@ -30,6 +32,10 @@ export async function uploadSession(
   form.append("title", input.title);
   if (input.description) form.append("description", input.description);
   form.append("duration_seconds", String(input.durationSeconds));
+  form.append("round_type", input.roundType || "jam");
+  if (input.roundMetadata) {
+    form.append("round_metadata", JSON.stringify(input.roundMetadata));
+  }
   if (input.videoBlob) {
     form.append("video", input.videoBlob, "recording.webm");
   }
@@ -38,8 +44,7 @@ export async function uploadSession(
   }
   const { data } = await apiClient.post<SessionSummary>(
     "/api/sessions",
-    form,
-    { headers: { "Content-Type": "multipart/form-data" } }
+    form
   );
   return data;
 }

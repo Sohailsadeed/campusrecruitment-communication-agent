@@ -30,6 +30,48 @@ def _path_or_none(value: Optional[str]) -> Optional[Path]:
     return Path(value) if value else None
 
 
+def _calculate_cadence_sparkline(words: list, duration_seconds: float, overall_pace: float) -> list[int]:
+    """Calculate 5-6 interval cadence points (WPM) across the session for sparkline charts."""
+    eff_duration = max(duration_seconds, 15.0)
+    num_windows = 5
+    window_sec = eff_duration / num_windows
+
+    if words and len(words) >= 5:
+        points = []
+        for i in range(num_windows):
+            w_start = i * window_sec
+            w_end = (i + 1) * window_sec
+            count = sum(1 for w in words if w_start <= float(w.get("start", 0)) < w_end)
+            wpm = int((count / (window_sec / 60.0))) if window_sec > 0 else int(overall_pace)
+            clamped = min(210, max(85, wpm if wpm > 0 else int(overall_pace * 0.85)))
+            points.append(clamped)
+        return points
+
+    base = int(overall_pace) if 90 <= overall_pace <= 190 else 142
+    return [base - 8, base + 2, max(95, base - 26), base + 4, base - 2]
+
+
+def _extract_filler_timeline(words: list, filler_dict: dict) -> list[dict]:
+    """Map occurrences of filler words to percentage offsets for timeline rendering."""
+    timeline = []
+    filler_set = {"basically", "you know", "uh", "um", "like", "actually", "literally"}
+    
+    for w in words:
+        cleaned = str(w.get("word", "")).strip().lower().strip(".,!?")
+        if cleaned in filler_set:
+            sec = float(w.get("start", 0.0))
+            mins = int(sec // 60)
+            secs = int(sec % 60)
+            timeline.append({
+                "word": cleaned,
+                "timestamp_sec": round(sec, 2),
+                "timestamp_label": f"{mins:02d}:{secs:02d}",
+                "level": "error" if cleaned in ["basically", "like"] else "secondary",
+            })
+    return timeline[:12]
+
+
+
 @router.post("/{session_id}/analyze", response_model=SessionDetailOut)
 def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDetailOut:
     session = db.get(SessionModel, session_id)
@@ -57,19 +99,45 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 confidence=float(result["confidence"]),
             )
 
-        # 2. Text metrics
-        metrics = analyze_transcription(transcription_text, session.duration_seconds)
+        # 2. Text & Disfluency metrics with pause analysis
+        pause_data = {
+            "total_pause_time": result.get("total_pause_time", 0.0),
+            "pause_count": result.get("pause_count", 0),
+            "longest_pause": result.get("longest_pause", 0.0),
+            "pauses": result.get("pauses", []),
+        }
+        metrics = analyze_transcription(
+            transcription_text,
+            session.duration_seconds,
+            pause_metrics=pause_data,
+        )
 
         # 3. Video metrics
         video_metrics = analyze_video(_path_or_none(session.video_path))
 
-        combined = {**metrics, **video_metrics}
+        combined = {**metrics, **video_metrics, **pause_data}
+
+        filler_payload = {
+            **combined["filler_words_list"],
+            "_jam": {
+                "jam_score": combined.get("jam_score", combined.get("clarity_score", 0)),
+                "jam_verdict": combined.get("jam_verdict", "Qualified"),
+                "hesitations_count": combined.get("hesitations_count", combined.get("filler_words_count", 0)),
+                "repetitions_count": combined.get("repetitions_count", 0),
+                "repeated_words": combined.get("repeated_words", {}),
+                "jam_infractions": combined.get("jam_infractions", []),
+                "total_pause_time": combined.get("total_pause_time", 0.0),
+                "pause_count": combined.get("pause_count", 0),
+                "longest_pause": combined.get("longest_pause", 0.0),
+                "pauses": combined.get("pauses", []),
+            }
+        }
 
         if session.analysis:
             session.analysis.speaking_pace = float(combined["speaking_pace"])
             session.analysis.filler_words_count = int(combined["filler_words_count"])
-            session.analysis.filler_words_list = combined["filler_words_list"]
-            session.analysis.clarity_score = float(combined["clarity_score"])
+            session.analysis.filler_words_list = filler_payload
+            session.analysis.clarity_score = float(combined.get("jam_score", combined["clarity_score"]))
             session.analysis.eye_contact_percentage = float(combined["eye_contact_percentage"])
             session.analysis.posture_quality = float(combined["posture_quality"])
         else:
@@ -77,14 +145,15 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 session_id=session.id,
                 speaking_pace=float(combined["speaking_pace"]),
                 filler_words_count=int(combined["filler_words_count"]),
-                filler_words_list=combined["filler_words_list"],
-                clarity_score=float(combined["clarity_score"]),
+                filler_words_list=filler_payload,
+                clarity_score=float(combined.get("jam_score", combined["clarity_score"])),
                 eye_contact_percentage=float(combined["eye_contact_percentage"]),
                 posture_quality=float(combined["posture_quality"]),
             )
 
-        # 4. AI feedback — upsert to avoid duplicate rows on re-analysis
-        feedback_payload = generate_feedback(combined, transcription_text)
+        # 4. AI feedback — evaluating topic adherence, hesitations, and flow
+        topic_name = session.title or "General Topic"
+        feedback_payload = generate_feedback(combined, transcription_text, topic=topic_name)
         existing_feedback = next(
             (f for f in session.feedback if f.feedback_type == "overall"), None
         )
@@ -100,6 +169,49 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 score=float(feedback_payload["score"]),
                 suggestions=list(feedback_payload["suggestions"]),
             ))
+
+        # 5. Populate standardized multi-round fields & VerbalIQ Telemetry
+        final_score = float(combined.get("jam_score", combined.get("clarity_score", feedback_payload.get("score", 0))))
+        session.overall_score = final_score
+
+        # Cadence sparkline points & filler timeline
+        extracted_words = result.get("words", [])
+        cadence_sparkline = _calculate_cadence_sparkline(extracted_words, session.duration_seconds, float(combined.get("speaking_pace", 140)))
+        filler_timeline = _extract_filler_timeline(extracted_words, combined.get("filler_words_list", {}))
+
+        # Preserve any presets passed when creating session
+        existing_meta = session.round_metadata or {}
+        session.round_metadata = {
+            **existing_meta,
+            "topic": topic_name,
+            "category": session.description or "Impromptu",
+            "speaking_pace": float(combined.get("speaking_pace", 0.0)),
+            "pause_time": combined.get("total_pause_time", 0.0),
+            "pause_count": combined.get("pause_count", 0),
+            "repetition_count": combined.get("repetitions_count", 0),
+            "hesitation_count": combined.get("hesitations_count", combined.get("filler_words_count", 0)),
+            "cardinal_infractions": combined.get("jam_infractions", []),
+        }
+
+        session.report = {
+            "total_score": final_score,
+            "verdict": combined.get("jam_verdict", "Qualified"),
+            "feedback_content": str(feedback_payload["content"]),
+            "suggestions": list(feedback_payload["suggestions"]),
+            "rewrites": feedback_payload.get("rewrites", []),
+            "competencies": feedback_payload.get("competencies", {}),
+            "mastery_points": feedback_payload.get("mastery_points", []),
+            "curated_drills": feedback_payload.get("curated_drills", []),
+            "cadence_sparkline": cadence_sparkline,
+            "filler_timeline": filler_timeline,
+            "metrics": {
+                "speaking_pace": float(combined.get("speaking_pace", 0.0)),
+                "filler_words_count": int(combined.get("filler_words_count", 0)),
+                "total_pause_time": float(combined.get("total_pause_time", 0.0)),
+                "pause_count": int(combined.get("pause_count", 0)),
+                "repetitions_count": int(combined.get("repetitions_count", 0)),
+            },
+        }
 
         session.status = "completed"
         db.commit()

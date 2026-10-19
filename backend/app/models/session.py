@@ -23,6 +23,10 @@ class Session(Base):
     video_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     audio_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    round_type: Mapped[str] = mapped_column(String(32), default="jam", nullable=False, index=True)
+    overall_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    round_metadata: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    report: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

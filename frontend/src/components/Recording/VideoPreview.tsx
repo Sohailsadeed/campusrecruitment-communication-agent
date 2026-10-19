@@ -10,8 +10,12 @@ const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
   ({ stream, muted = true, src }, ref) => {
     useEffect(() => {
       const video = (ref as React.RefObject<HTMLVideoElement>)?.current;
-      if (video && stream) {
-        video.srcObject = stream;
+      if (video) {
+        if (stream) {
+          video.srcObject = stream;
+        } else {
+          video.srcObject = null;
+        }
       }
     }, [ref, stream]);
 
@@ -19,7 +23,7 @@ const VideoPreview = forwardRef<HTMLVideoElement, VideoPreviewProps>(
       <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-black/60">
         <video
           ref={ref}
-          autoPlay
+          autoPlay={Boolean(stream)}
           playsInline
           muted={muted}
           controls={!stream && Boolean(src)}

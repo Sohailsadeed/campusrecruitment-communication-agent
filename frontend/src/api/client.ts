@@ -10,6 +10,10 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
+  const customUrl = localStorage.getItem("speakflow_api_url");
+  if (customUrl) {
+    config.baseURL = customUrl;
+  }
   const token = localStorage.getItem("speakflow_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

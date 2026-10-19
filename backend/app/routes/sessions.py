@@ -15,6 +15,7 @@ from fastapi import (
     Header,
     HTTPException,
     UploadFile,
+    Response,  # Add this
     status,
 )
 from jose import JWTError
@@ -37,31 +38,42 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 # Allowed MIME types and their permitted file extensions
-_ALLOWED_VIDEO_TYPES = {"video/webm", "video/mp4", "video/ogg", "video/quicktime"}
-_ALLOWED_AUDIO_TYPES = {"audio/webm", "audio/ogg", "audio/mpeg", "audio/wav", "audio/mp4"}
+_ALLOWED_VIDEO_TYPES = {
+    "video/webm",
+    "video/mp4",
+    "video/ogg",
+    "video/quicktime",
+    "video/x-matroska",
+    "application/octet-stream",
+}
+_ALLOWED_AUDIO_TYPES = {
+    "audio/webm",
+    "audio/ogg",
+    "audio/mpeg",
+    "audio/wav",
+    "audio/mp4",
+    "application/octet-stream",
+}
 _ALLOWED_EXTENSIONS = {".webm", ".mp4", ".ogg", ".mov", ".mp3", ".wav", ".m4a"}
 
 
-def _get_current_user(
+def _get_optional_user(
     authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
-) -> User:
-    """Extract and validate JWT from Authorization header, return the User."""
+) -> Optional[User]:
+    """Extract and validate JWT from Authorization header if present, return the User or None."""
     if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
+        return None
     token = authorization.split(" ", 1)[1]
     try:
         from jose import jwt
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         subject: Optional[str] = payload.get("sub")
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        return None
     if not subject:
-        raise HTTPException(status_code=401, detail="Invalid token payload")
-    user = db.scalar(select(User).where(User.email == subject))
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
+        return None
+    return db.scalar(select(User).where(User.email == subject))
 
 
 def _save_upload(file: UploadFile, subdir: str) -> str:
@@ -106,16 +118,18 @@ def _save_upload(file: UploadFile, subdir: str) -> str:
 def list_sessions(
     limit: int = 50,
     offset: int = 0,
+    round_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ) -> List[SessionOut]:
-    stmt = (
-        select(SessionModel)
-        .where(SessionModel.user_id == current_user.id)
-        .order_by(SessionModel.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    stmt = select(SessionModel).order_by(SessionModel.created_at.desc())
+    if round_type:
+        stmt = stmt.where(SessionModel.round_type == round_type)
+    if current_user is not None:
+        stmt = stmt.where(
+            (SessionModel.user_id == current_user.id) | (SessionModel.user_id.is_(None))
+        )
+    stmt = stmt.offset(offset).limit(limit)
     rows = db.scalars(stmt).all()
     return [SessionOut.model_validate(r) for r in rows]
 
@@ -125,10 +139,12 @@ async def create_session(
     title: str = Form(...),
     description: Optional[str] = Form(None),
     duration_seconds: float = Form(0.0),
+    round_type: str = Form("jam"),
+    round_metadata: Optional[str] = Form(None),
     video: Optional[UploadFile] = File(None),
     audio: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ) -> SessionOut:
     video_path: Optional[str] = None
     audio_path: Optional[str] = None
@@ -137,13 +153,23 @@ async def create_session(
     if audio is not None:
         audio_path = _save_upload(audio, "audio")
 
+    meta_dict = {}
+    if round_metadata:
+        try:
+            import json
+            meta_dict = json.loads(round_metadata) if isinstance(round_metadata, str) else dict(round_metadata)
+        except Exception:
+            meta_dict = {}
+
     new_session = SessionModel(
-        user_id=current_user.id,
+        user_id=current_user.id if current_user else None,
         title=title,
         description=description,
         duration_seconds=duration_seconds,
         video_path=video_path,
         audio_path=audio_path,
+        round_type=round_type,
+        round_metadata=meta_dict,
         status="pending",
     )
     db.add(new_session)
@@ -156,13 +182,17 @@ async def create_session(
 def create_session_json(
     payload: SessionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ) -> SessionOut:
     new_session = SessionModel(
-        user_id=current_user.id,
+        user_id=current_user.id if current_user else None,
         title=payload.title,
         description=payload.description,
         duration_seconds=payload.duration_seconds,
+        round_type=payload.round_type,
+        overall_score=payload.overall_score,
+        round_metadata=payload.round_metadata,
+        report=payload.report,
         status="pending",
     )
     db.add(new_session)
@@ -171,12 +201,12 @@ def create_session_json(
     return SessionOut.model_validate(new_session)
 
 
-def _get_session_for_user(session_id: int, user: User, db: Session) -> SessionModel:
-    """Fetch a session, ensuring it belongs to the current user."""
+def _get_session_for_user(session_id: int, user: Optional[User], db: Session) -> SessionModel:
+    """Fetch a session, ensuring it belongs to the current user if logged in."""
     session = db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != user.id:
+    if user is not None and session.user_id is not None and session.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
     return session
 
@@ -185,7 +215,7 @@ def _get_session_for_user(session_id: int, user: User, db: Session) -> SessionMo
 def get_session(
     session_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ) -> SessionDetailOut:
     session = _get_session_for_user(session_id, current_user, db)
     return SessionDetailOut.model_validate(session)
@@ -196,7 +226,7 @@ def update_session(
     session_id: int,
     payload: SessionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
+    current_user: Optional[User] = Depends(_get_optional_user),
 ) -> SessionOut:
     session = _get_session_for_user(session_id, current_user, db)
     for field, value in payload.model_dump(exclude_unset=True).items():
@@ -206,12 +236,19 @@ def update_session(
     return SessionOut.model_validate(session)
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    response_model=None,
+)
 def delete_session(
     session_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(_get_current_user),
-) -> None:
+    current_user: Optional[User] = Depends(_get_optional_user),
+) -> Response:
     session = _get_session_for_user(session_id, current_user, db)
     db.delete(session)
     db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+

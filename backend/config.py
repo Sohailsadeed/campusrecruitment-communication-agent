@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # Ollama / LLM
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.2"
+    ollama_model: str = "qwen3.5:4b"
     llm_timeout_seconds: int = 60
 
     # Whisper

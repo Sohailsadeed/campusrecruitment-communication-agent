@@ -8,6 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class SessionBase(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = None
+    round_type: str = "jam"
+    overall_score: Optional[float] = None
+    round_metadata: Dict[str, Any] = Field(default_factory=dict)
+    report: Optional[Dict[str, Any]] = None
 
 
 class SessionCreate(SessionBase):
@@ -18,6 +22,8 @@ class SessionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    overall_score: Optional[float] = None
+    report: Optional[Dict[str, Any]] = None
 
 
 class SessionOut(SessionBase):

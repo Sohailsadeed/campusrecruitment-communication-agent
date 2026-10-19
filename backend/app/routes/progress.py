@@ -24,14 +24,23 @@ def get_summary(db: Session = Depends(get_db)) -> Dict[str, Any]:
         avg_clarity = round(
             sum(a.clarity_score for a in analyses) / len(analyses), 2
         )
-        avg_pace = round(sum(a.speaking_pace for a in analyses) / len(analyses), 2)
         avg_eye = round(
             sum(a.eye_contact_percentage for a in analyses) / len(analyses), 2
         )
         avg_posture = round(sum(a.posture_quality for a in analyses) / len(analyses), 2)
-        best_pace = max((a.speaking_pace for a in analyses), default=0)
         best_clarity = max((a.clarity_score for a in analyses), default=0)
         total_filler_words = sum(a.filler_words_count for a in analyses)
+
+        # Filter out extreme pace outliers (e.g. <5s scratch tests)
+        valid_paces = [a.speaking_pace for a in analyses if 40 <= a.speaking_pace <= 240]
+        if valid_paces:
+            avg_pace = round(sum(valid_paces) / len(valid_paces), 1)
+            # In public speaking, ideal pace is ~145 WPM (130-160 range).
+            # The "best pace" is the session closest to optimal delivery, not an auctioneer sprint.
+            best_pace = round(min(valid_paces, key=lambda p: abs(p - 145.0)), 1)
+        else:
+            avg_pace = round(sum(a.speaking_pace for a in analyses) / len(analyses), 2)
+            best_pace = round(min(analyses, key=lambda a: abs(a.speaking_pace - 145.0)).speaking_pace, 1)
     else:
         avg_clarity = avg_pace = avg_eye = avg_posture = 0.0
         best_pace = best_clarity = 0.0

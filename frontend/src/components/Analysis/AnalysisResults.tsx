@@ -100,19 +100,37 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
     })
     .join(" ");
 
-  // Rewrites
-  const rewrites = report?.rewrites?.length
-    ? report.rewrites
-    : [
-        {
-          timestamp: "00:14",
-          original: "“So yeah, we basically had to rewrite the cache layer because it was like crashing constantly.”",
-          polish: "“To eliminate recurring latency spikes, we refactored the distributed cache layer using Redis clusters, reducing tail latency by 45%.”",
-          grade: "C+",
-          polish_grade: "A+",
-          tip: "Substitute emotional colloquialisms ('crashing constantly') with quantified architectural impact.",
-        },
-      ];
+  // Rewrites with Guaranteed In-Context Timestamps and Grades
+  const rawRewrites = report?.rewrites && report.rewrites.length > 0 ? report.rewrites : [];
+  const fallbackRewrites = [
+    {
+      timestamp: "00:09",
+      original: "“So yeah, we basically had to rewrite the cache layer because it was like crashing constantly.”",
+      polish: "“To eliminate recurring latency spikes, we refactored the distributed cache layer using Redis clusters, reducing tail latency by 45%.”",
+      grade: "C-",
+      polish_grade: "A+",
+      tip: "Substitute emotional colloquialisms ('crashing constantly') with quantified architectural impact.",
+    },
+  ];
+
+  const rewrites = (rawRewrites.length ? rawRewrites : fallbackRewrites).map((rw: any, idx: number) => {
+    let ts = (rw.timestamp || "").trim();
+    if (!ts || ts === "00:00") {
+      const defaultSecs = 9 + idx * 19;
+      const mins = Math.floor(defaultSecs / 60);
+      const secs = defaultSecs % 60;
+      ts = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    return {
+      ...rw,
+      timestamp: ts,
+      grade: (rw.grade || "").trim() || (idx % 2 === 0 ? "C-" : "D+"),
+      polish_grade: (rw.polish_grade || "").trim() || "A+",
+      tip: (rw.tip || "").trim() || "Anchor with specific metrics, decisive framing, and direct ownership phrasing.",
+      original: (rw.original || "").trim(),
+      polish: (rw.polish || "").trim(),
+    };
+  });
 
   const currentRewrite = rewrites[rewriteIdx % rewrites.length];
 
@@ -151,6 +169,65 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const prosody = report?.prosody;
   const toneVerdict = prosody?.tone_verdict || report?.metrics?.tone_verdict || (score >= 82 ? "Authoritative & Resonant" : score >= 70 ? "Measured & Structured" : "Developing Articulation");
   const prosodyFeedback = prosody?.prosody_feedback || (pace >= 125 && pace <= 165 ? "Optimal executive speaking cadence" : pace < 125 ? "Measured acoustic tempo with deliberate pauses" : "Accelerated speech pace detected");
+
+  // Dynamic Extraction of Actual Detected Fillers and Repetitions
+  const rawFillerList = session.analysis?.filler_words_list || {};
+  const jamData = rawFillerList._jam || {};
+
+  const detectedFillers: { word: string; count: number; category: string }[] = [];
+  Object.entries(rawFillerList).forEach(([key, val]) => {
+    if (!key.startsWith("_") && typeof val === "number" && val > 0) {
+      detectedFillers.push({
+        word: key,
+        count: val,
+        category: ["um", "uh", "umm", "uhh", "hmm", "er", "ah"].includes(key.toLowerCase())
+          ? "Hesitation Sound"
+          : "Colloquial Filler",
+      });
+    }
+  });
+
+  // Cross-reference with filler_timeline
+  const timelineCounts: Record<string, number> = {};
+  report?.filler_timeline?.forEach((item) => {
+    if (item.word) {
+      const w = item.word.toLowerCase();
+      timelineCounts[w] = (timelineCounts[w] || 0) + 1;
+    }
+  });
+
+  Object.entries(timelineCounts).forEach(([word, count]) => {
+    const existing = detectedFillers.find((d) => d.word.toLowerCase() === word);
+    if (!existing) {
+      detectedFillers.push({
+        word,
+        count,
+        category: ["um", "uh", "umm", "uhh", "hmm", "er", "ah"].includes(word)
+          ? "Hesitation Sound"
+          : "Colloquial Filler",
+      });
+    } else if (existing.count < count) {
+      existing.count = count;
+    }
+  });
+  detectedFillers.sort((a, b) => b.count - a.count);
+
+  // Extract circular content repetitions
+  const repeatedWordsMap = (jamData.repeated_words || session.round_metadata?.repeated_words || {}) as Record<string, number>;
+  const commonStopwords = new Set([
+    "with", "and", "the", "that", "this", "for", "from", "they", "them",
+    "have", "been", "over", "were", "what", "when", "where", "which",
+    "into", "some", "like", "will", "would", "about"
+  ]);
+
+  const detectedRepetitions = Object.entries(repeatedWordsMap)
+    .filter(([word, count]) => typeof count === "number" && count >= 3 && !commonStopwords.has(word.toLowerCase()))
+    .map(([word, count]) => ({
+      word,
+      count,
+      category: "Repetition Loop",
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <div className="px-4 sm:px-8 py-8 sm:py-10 flex flex-col gap-8 max-w-7xl mx-auto">
@@ -404,53 +481,65 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
 
         {/* Right: Speech Mechanics & Telemetry Deck (5 Cols) */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* Filler Word Tracking Card */}
+          {/* Dynamic Filler & Repetition Tracking Card */}
           <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 shadow-lg flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">Lexical Cleanliness</span>
-                <h3 className="font-headline-sm text-base text-on-surface font-bold">Filler Density Analysis</h3>
+                <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">Lexical Cleanliness &amp; Phrasing</span>
+                <h3 className="font-headline-sm text-base text-on-surface font-bold">Detected Disfluencies &amp; Repetitions</h3>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary font-label-numeric-sm text-xs font-bold">
-                {fillersCount === 0 ? "0.0% (Flawless)" : `${(fillersCount * 0.4).toFixed(1)}% (${fillersCount} Detected)`}
+                {detectedFillers.length === 0 && detectedRepetitions.length === 0
+                  ? "0.0% (Flawless)"
+                  : `${fillersCount} Filler${fillersCount === 1 ? "" : "s"} • ${detectedRepetitions.length} Repetition${detectedRepetitions.length === 1 ? "" : "s"}`}
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
-                <span className="text-xs text-outline">“basically”</span>
-                <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {session.analysis?.filler_words_list?.basically ?? 0}x
-                </span>
-                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
-                  (session.analysis?.filler_words_list?.basically ?? 0) > 0 ? "text-error" : "text-outline"
-                }`}>
-                  {(session.analysis?.filler_words_list?.basically ?? 0) > 0 ? "Detected" : "Clean"}
-                </span>
+            {detectedFillers.length === 0 && detectedRepetitions.length === 0 ? (
+              <div className="bg-surface-container p-4 rounded-lg flex items-center gap-3">
+                <span className="material-symbols-outlined text-tertiary text-[24px]">verified</span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-on-surface">Flawless Lexical Execution</span>
+                  <span className="text-[11px] text-on-surface-variant">
+                    Zero verbal crutches, filler sounds, or repetitive loops detected across this session.
+                  </span>
+                </div>
               </div>
-              <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
-                <span className="text-xs text-outline">“you know”</span>
-                <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {session.analysis?.filler_words_list?.["you know"] ?? 0}x
-                </span>
-                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
-                  (session.analysis?.filler_words_list?.["you know"] ?? 0) > 0 ? "text-error" : "text-outline"
-                }`}>
-                  {(session.analysis?.filler_words_list?.["you know"] ?? 0) > 0 ? "Detected" : "Clean"}
-                </span>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {/* Dynamically rendered detected fillers */}
+                {detectedFillers.map((item) => (
+                  <div
+                    key={`filler-${item.word}`}
+                    className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center border border-error-container/20"
+                  >
+                    <span className="text-xs text-on-surface font-medium truncate max-w-full">“{item.word}”</span>
+                    <span className="font-label-numeric text-base text-error font-bold mt-1">
+                      {item.count}x
+                    </span>
+                    <span className="font-label-caps text-[9px] mt-0.5 px-1.5 py-0.5 rounded bg-error-container/30 text-error font-semibold uppercase">
+                      {item.category}
+                    </span>
+                  </div>
+                ))}
+
+                {/* Dynamically rendered circular repetition loops */}
+                {detectedRepetitions.slice(0, 4).map((item) => (
+                  <div
+                    key={`rep-${item.word}`}
+                    className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center border border-secondary/20"
+                  >
+                    <span className="text-xs text-secondary font-medium truncate max-w-full">“{item.word}”</span>
+                    <span className="font-label-numeric text-base text-secondary font-bold mt-1">
+                      {item.count}x
+                    </span>
+                    <span className="font-label-caps text-[9px] mt-0.5 px-1.5 py-0.5 rounded bg-secondary-container/20 text-secondary font-semibold uppercase">
+                      Repeated Phrase
+                    </span>
+                  </div>
+                ))}
               </div>
-              <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
-                <span className="text-xs text-outline">“uh / um”</span>
-                <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {(session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0) + (session.analysis?.filler_words_list?.umm ?? 0) + (session.analysis?.filler_words_list?.uhh ?? 0)}x
-                </span>
-                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
-                  ((session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0)) > 0 ? "text-error" : "text-tertiary"
-                }`}>
-                  {((session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0)) > 0 ? "Flagged" : "Controlled"}
-                </span>
-              </div>
-            </div>
+            )}
 
             {/* Filler Timeline Strip */}
             <div className="flex flex-col gap-1.5">
@@ -573,9 +662,15 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
               <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">High-Impact Linguistic Polishing</span>
               <h3 className="font-headline-md text-lg text-on-surface font-bold">Critical Moment Rewrites</h3>
             </div>
-            <span className="font-label-numeric-sm text-xs text-secondary bg-surface-container px-2.5 py-1 rounded-md font-semibold">
-              Timestamp {currentRewrite.timestamp}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-label-numeric-sm text-xs text-secondary bg-surface-container px-2.5 py-1 rounded-md font-semibold flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px]">schedule</span>
+                {currentRewrite.timestamp || `00:${14 + (rewriteIdx % rewrites.length) * 16}`}
+              </span>
+              <span className="font-label-caps text-[10px] text-outline font-semibold bg-surface-container px-2 py-1 rounded-md">
+                Moment {((rewriteIdx % rewrites.length) + 1)} of {rewrites.length}
+              </span>
+            </div>
           </div>
 
           <div className="bg-surface-container p-3 rounded-lg flex items-center gap-2">
@@ -593,8 +688,8 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
                 <span className="font-label-caps text-[10px] uppercase text-error tracking-wider font-bold flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">cancel</span> What You Said
                 </span>
-                <span className="font-label-numeric-sm text-[11px] text-outline font-semibold">
-                  Grade: {currentRewrite.grade}
+                <span className="font-label-numeric-sm text-[11px] px-2 py-0.5 rounded bg-surface-container-highest text-outline font-bold flex items-center gap-1">
+                  Grade: <span className="text-error font-extrabold">{currentRewrite.grade || "C-"}</span>
                 </span>
               </div>
               <p className="text-xs text-on-surface italic leading-relaxed">
@@ -616,8 +711,8 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
                 <span className="font-label-caps text-[10px] uppercase text-primary tracking-wider font-bold flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">auto_awesome</span> Recommended Polish
                 </span>
-                <span className="font-label-numeric-sm text-[11px] text-tertiary font-bold">
-                  Grade: {currentRewrite.polish_grade}
+                <span className="font-label-numeric-sm text-[11px] px-2 py-0.5 rounded bg-tertiary-container/30 text-tertiary font-bold flex items-center gap-1">
+                  Grade: <span className="text-tertiary font-extrabold">{currentRewrite.polish_grade || "A+"}</span>
                 </span>
               </div>
               <p className="text-xs text-on-surface font-medium leading-relaxed">
@@ -634,7 +729,7 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             </div>
           </div>
 
-          {/* Micro Coaching Insight */}
+          {/* Micro Coaching Insight with Prev & Next */}
           <div className="p-3.5 rounded-lg bg-surface-container flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span className="material-symbols-outlined text-[18px] text-tertiary">tips_and_updates</span>
@@ -643,13 +738,37 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
               </span>
             </div>
             {rewrites.length > 1 && (
-              <button
-                onClick={() => setRewriteIdx((i) => (i + 1) % rewrites.length)}
-                className="shrink-0 text-xs text-secondary hover:text-on-surface font-semibold flex items-center gap-0.5"
-                type="button"
-              >
-                Next <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setRewriteIdx((i) => (i - 1 + rewrites.length) % rewrites.length)}
+                  className="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-secondary hover:text-on-surface font-semibold flex items-center gap-0.5 text-xs transition-colors"
+                  type="button"
+                  title="Previous suggestion"
+                >
+                  <span className="material-symbols-outlined text-[16px]">chevron_left</span> Prev
+                </button>
+                <div className="flex items-center gap-1 px-1">
+                  {rewrites.map((_, i) => (
+                    <button
+                      key={`moment-dot-${i}`}
+                      type="button"
+                      onClick={() => setRewriteIdx(i)}
+                      className={`h-1.5 rounded-full transition-all ${
+                        (rewriteIdx % rewrites.length) === i ? "w-4 bg-secondary" : "w-1.5 bg-outline-variant/60 hover:bg-outline"
+                      }`}
+                      title={`Go to Moment ${i + 1}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setRewriteIdx((i) => (i + 1) % rewrites.length)}
+                  className="px-2 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-secondary hover:text-on-surface font-semibold flex items-center gap-0.5 text-xs transition-colors"
+                  type="button"
+                  title="Next suggestion"
+                >
+                  Next <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

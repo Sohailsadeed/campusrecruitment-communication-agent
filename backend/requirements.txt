@@ -25,6 +25,7 @@ rq>=1.15.0
 # Security & Authentication
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 
 # ML, Audio & Computer Vision (JAM Round)
 # Note: numpy is constrained to <2.0.0 to guarantee MediaPipe and OpenCV compatibility
@@ -44,5 +45,7 @@ langchain-openai>=0.0.5
 langgraph>=0.0.20
 chromadb>=0.4.22
 langchain-chroma>=0.1.0
+langchain-huggingface>=0.1.0
+sentence-transformers>=2.2.0
 mem0ai>=0.0.1
 pypdf>=4.0.0

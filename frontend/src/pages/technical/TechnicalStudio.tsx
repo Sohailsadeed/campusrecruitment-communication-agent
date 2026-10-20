@@ -42,17 +42,14 @@ export default function TechnicalStudio() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef<any>(null);
 
-  // Evaluation Popup after each question
-  const [lastEval, setLastEval] = useState<{ score: number; feedback: string } | null>(null);
-
   // Timer effect
   useEffect(() => {
     let timer: any;
-    if (sessionId && !lastEval) {
+    if (sessionId) {
       timer = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
     }
     return () => clearInterval(timer);
-  }, [sessionId, lastEval]);
+  }, [sessionId]);
 
   // Speech Recognition setup
   useEffect(() => {
@@ -177,32 +174,21 @@ export default function TechnicalStudio() {
     try {
       const res = await submitTechnicalAnswer(sessionId, answerText.trim());
 
-      setLastEval({
-        score: res.evaluation.score,
-        feedback: res.evaluation.feedback,
-      });
-
       if (res.is_complete && res.report) {
-        // Complete -> go to report
-        setTimeout(() => {
-          navigate(`/technical/report/${sessionId}`);
-        }, 2200);
+        // Complete -> go directly to full report dossier
+        navigate(`/technical/report/${sessionId}`);
       } else if (res.next_question) {
         setCurrentQuestion(res.next_question);
         setQuestionCount(res.question_count);
+        setAnswerText("");
+        if (res.next_question.text) {
+          handleSpeakQuestion(res.next_question.text);
+        }
       }
     } catch (err: any) {
       setErrorMsg(err?.response?.data?.detail || "Failed to evaluate answer.");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleContinueToNextQuestion = () => {
-    setLastEval(null);
-    setAnswerText("");
-    if (currentQuestion?.text) {
-      handleSpeakQuestion(currentQuestion.text);
     }
   };
 
@@ -552,47 +538,17 @@ export default function TechnicalStudio() {
             {isSubmitting ? (
               <>
                 <span className="material-symbols-outlined animate-spin text-[16px]">refresh</span>
-                <span>Evaluating Response with Nemotron...</span>
+                <span>Synthesizing Next Question...</span>
               </>
             ) : (
               <>
-                <span>Submit & Next</span>
-                <span className="material-symbols-outlined text-[16px]">send</span>
+                <span>{questionCount + 1 >= maxQuestions ? "Complete & View Report" : "Next Question"}</span>
+                <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
               </>
             )}
           </button>
         </div>
       </div>
-
-      {/* Instant Feedback Modal Drawer between questions */}
-      {lastEval && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="max-w-lg w-full bg-surface-container-low border border-outline-variant/40 rounded-2xl p-6 sm:p-7 shadow-2xl flex flex-col gap-5">
-            <div className="flex items-center justify-between">
-              <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[18px]">verified</span>
-                Evaluator Feedback
-              </span>
-              <span className="font-label-numeric text-base text-tertiary font-extrabold bg-tertiary-container/30 px-2.5 py-0.5 rounded-full">
-                Score: {lastEval.score}/10
-              </span>
-            </div>
-
-            <p className="text-sm text-on-surface leading-relaxed font-body-md">
-              {lastEval.feedback}
-            </p>
-
-            <button
-              type="button"
-              onClick={handleContinueToNextQuestion}
-              className="w-full py-3 rounded-xl bg-secondary text-on-secondary font-headline-sm text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-secondary/20 hover:opacity-95 transition-opacity"
-            >
-              <span>Continue to Next Question</span>
-              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

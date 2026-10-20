@@ -12,17 +12,26 @@ from config import settings
 logger = logging.getLogger(__name__)
 
 _llm = None
+_cached_key = None
 
 
 def _get_llm():
     """Get LLM instance: Nemotron via OpenRouter, falling back to local Ollama."""
-    global _llm
-    if _llm is None:
-        if settings.openrouter_api_key and settings.openrouter_api_key.startswith("sk-"):
+    global _llm, _cached_key
+    import os
+    from dotenv import dotenv_values
+
+    # Dynamically re-read .env if key is updated
+    env_vals = dotenv_values(str(settings.upload_dir.parent / ".env"))
+    current_key = env_vals.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
+
+    if _llm is None or _cached_key != current_key:
+        _cached_key = current_key
+        if current_key and current_key.startswith("sk-"):
             logger.info("Using OpenRouter LLM: %s", settings.chat_model)
             _llm = ChatOpenAI(
                 model=settings.chat_model,
-                api_key=settings.openrouter_api_key,
+                api_key=current_key,
                 base_url=settings.openrouter_base_url,
                 max_tokens=2048,
                 temperature=0.7,

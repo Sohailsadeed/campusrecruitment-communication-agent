@@ -1,17 +1,22 @@
+import { useState } from "react";
 import StatisticsCards from "../components/Dashboard/StatisticsCards";
 import ProgressDashboard from "../components/Dashboard/ProgressDashboard";
+import TechnicalProgressDashboard from "../components/Dashboard/TechnicalProgressDashboard";
 import SessionHistory from "../components/Dashboard/SessionHistory";
 import Loading from "../components/Common/Loading";
 import {
   useProgressMetrics,
   useProgressSummary,
   useSessions,
+  useTechnicalProgress,
 } from "../hooks/useSessions";
 
 export default function DashboardPage() {
+  const [activeTab, setActiveTab] = useState<"all" | "technical" | "jam">("all");
   const summaryQuery = useProgressSummary();
   const metricsQuery = useProgressMetrics();
   const sessionsQuery = useSessions();
+  const techQuery = useTechnicalProgress();
 
   if (summaryQuery.isLoading || sessionsQuery.isLoading || metricsQuery.isLoading) {
     return <Loading label="Loading dashboard" />;
@@ -20,6 +25,7 @@ export default function DashboardPage() {
   const summary = summaryQuery.data;
   const metrics = metricsQuery.data || [];
   const sessions = sessionsQuery.data || [];
+  const techData = techQuery.data;
 
   return (
     <div className="space-y-6">
@@ -47,8 +53,76 @@ export default function DashboardPage() {
       </div>
 
       {summary ? <StatisticsCards summary={summary} /> : null}
-      <ProgressDashboard metrics={metrics} />
-      <SessionHistory sessions={sessions} />
+
+      {/* Analytics Track Filter Tabs */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-surface-container border border-outline-variant/30">
+          <button
+            type="button"
+            onClick={() => setActiveTab("all")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "all"
+                ? "bg-surface-container-high text-on-surface shadow-sm font-bold"
+                : "text-outline hover:text-on-surface"
+            }`}
+          >
+            All Tracks
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("technical")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === "technical"
+                ? "bg-secondary/20 text-secondary border border-secondary/30 shadow-sm font-bold"
+                : "text-outline hover:text-on-surface"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[15px]">terminal</span>
+            <span>Technical Drill Trajectory</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("jam")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === "jam"
+                ? "bg-primary/20 text-primary border border-primary/30 shadow-sm font-bold"
+                : "text-outline hover:text-on-surface"
+            }`}
+          >
+            <span className="material-symbols-outlined text-[15px]">sensors</span>
+            <span>JAM Fluency Telemetry</span>
+          </button>
+        </div>
+
+        <span className="text-xs text-outline font-label-numeric-sm hidden sm:inline">
+          {activeTab === "technical"
+            ? `${techData?.summary.completed_drills || 0} Technical Drills Evaluated`
+            : activeTab === "jam"
+            ? `${metrics.length} JAM Sessions Evaluated`
+            : `${(techData?.summary.completed_drills || 0) + metrics.length} Total Evaluated Rounds`}
+        </span>
+      </div>
+
+      {/* Technical Interview Trajectory Visual Chart */}
+      {(activeTab === "all" || activeTab === "technical") && (
+        <TechnicalProgressDashboard data={techData} isLoading={techQuery.isLoading} />
+      )}
+
+      {/* JAM Speech Delivery & Fluency Visual Chart */}
+      {(activeTab === "all" || activeTab === "jam") && (
+        <ProgressDashboard metrics={metrics} />
+      )}
+
+      {/* Filtered Recent Sessions History */}
+      <SessionHistory
+        sessions={
+          activeTab === "technical"
+            ? sessions.filter((s) => s.round_type === "technical")
+            : activeTab === "jam"
+            ? sessions.filter((s) => s.round_type !== "technical")
+            : sessions
+        }
+      />
     </div>
   );
 }

@@ -83,3 +83,80 @@ def get_metrics(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
             }
         )
     return output
+
+
+@router.get("/technical")
+def get_technical_progress(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Return technical interview scores, progression over time, and competency benchmarks."""
+    sessions = db.scalars(
+        select(SessionModel)
+        .where(SessionModel.round_type == "technical")
+        .order_by(SessionModel.created_at.asc())
+    ).all()
+
+    timeline: List[Dict[str, Any]] = []
+    category_scores: Dict[str, List[float]] = {}
+    completed_scores: List[float] = []
+
+    for s in sessions:
+        score = s.overall_score
+        if score is None and s.report and isinstance(s.report, dict):
+            score = s.report.get("total_score")
+
+        tech = s.technical_detail
+        questions = tech.questions if (tech and isinstance(tech.questions, list)) else []
+
+        # Process question categories
+        for q in questions:
+            if isinstance(q, dict) and "score" in q and q["score"] is not None:
+                q_type = q.get("type", "Architecture").title()
+                category_scores.setdefault(q_type, []).append(float(q["score"]) * 10.0)
+
+        # Only include in progression timeline if completed or has score
+        if score is not None:
+            completed_scores.append(float(score))
+            role = tech.role if (tech and tech.role) else s.title.replace("Technical Interview: ", "")
+            verdict = "Needs Focus"
+            if score >= 85:
+                verdict = "Strong Hire"
+            elif score >= 70:
+                verdict = "Competitive Hire"
+            elif score >= 55:
+                verdict = "Lean Hire"
+
+            timeline.append({
+                "session_id": s.id,
+                "title": s.title,
+                "role": role,
+                "target_company": tech.target_company if tech else None,
+                "score": round(float(score), 1),
+                "benchmark": 85.0,  # Staff Strong Hire Threshold
+                "competitive_threshold": 70.0,
+                "questions_count": len(questions),
+                "verdict": verdict,
+                "created_at": s.created_at.isoformat(),
+            })
+
+    total_drills = len(sessions)
+    completed_drills = len(completed_scores)
+    avg_score = round(sum(completed_scores) / len(completed_scores), 1) if completed_scores else 0.0
+    peak_score = round(max(completed_scores), 1) if completed_scores else 0.0
+
+    competencies = [
+        {"category": cat, "avg_score": round(sum(scores) / len(scores), 1), "challenges_count": len(scores)}
+        for cat, scores in category_scores.items()
+    ]
+    competencies.sort(key=lambda c: c["avg_score"], reverse=True)
+
+    return {
+        "timeline": timeline,
+        "summary": {
+            "total_drills": total_drills,
+            "completed_drills": completed_drills,
+            "avg_score": avg_score,
+            "peak_score": peak_score,
+            "latest_verdict": timeline[-1]["verdict"] if timeline else "No Drills Yet",
+        },
+        "competencies": competencies,
+    }
+

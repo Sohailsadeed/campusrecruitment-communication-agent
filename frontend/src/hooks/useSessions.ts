@@ -6,7 +6,13 @@ import {
   uploadSession,
   type UploadSessionInput,
 } from "../api/sessions";
-import { analyzeSession, getProgressMetrics, getProgressSummary } from "../api/analysis";
+import {
+  analyzeSession,
+  getAnalysis,
+  getProgressMetrics,
+  getProgressSummary,
+  getTechnicalProgress,
+} from "../api/analysis";
 import type { SessionDetail } from "../types";
 
 export function useSessions() {
@@ -70,3 +76,11 @@ export function useProgressMetrics() {
     queryFn: getProgressMetrics,
   });
 }
+
+export function useTechnicalProgress() {
+  return useQuery({
+    queryKey: ["progress", "technical"],
+    queryFn: getTechnicalProgress,
+  });
+}
+

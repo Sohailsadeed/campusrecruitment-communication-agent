@@ -5,6 +5,8 @@ import RecordingPage from "./pages/RecordingPage";
 import AnalysisPage from "./pages/AnalysisPage";
 import DashboardPage from "./pages/DashboardPage";
 import SettingsPage from "./pages/SettingsPage";
+import TechnicalStudio from "./pages/technical/TechnicalStudio";
+import TechnicalReport from "./pages/technical/TechnicalReport";
 
 export default function App() {
   return (
@@ -12,6 +14,8 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/record" element={<RecordingPage />} />
+        <Route path="/technical" element={<TechnicalStudio />} />
+        <Route path="/technical/report/:sessionId" element={<TechnicalReport />} />
         <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/settings" element={<SettingsPage />} />

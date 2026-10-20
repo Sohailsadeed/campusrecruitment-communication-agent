@@ -7,7 +7,8 @@ export default function Layout() {
 
   const navItems = [
     { path: "/", label: "Practice Arena", icon: "grid_view" },
-    { path: "/record", label: "Live Session", icon: "sensors", pulse: true },
+    { path: "/record", label: "Live JAM Session", icon: "sensors", pulse: true },
+    { path: "/technical", label: "Technical Drill", icon: "terminal" },
     { path: "/dashboard", label: "Pattern & Progress", icon: "insights" },
   ];
 

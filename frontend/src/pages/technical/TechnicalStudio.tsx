@@ -1,0 +1,598 @@
+import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  startTechnicalInterview,
+  submitTechnicalAnswer,
+  uploadResume,
+  QuestionItem,
+} from "../../api/technical";
+
+const ROLE_PRESETS = [
+  { label: "Full Stack Engineer", icon: "layers", desc: "React, Node.js, distributed caches, and system design" },
+  { label: "Backend Systems Engineer", icon: "dns", desc: "High-throughput APIs, microservices, and databases" },
+  { label: "Machine Learning Engineer", icon: "neurology", desc: "Model deployment, pipelines, and evaluation" },
+  { label: "DevOps & Cloud Architect", icon: "cloud", desc: "Kubernetes, CI/CD, incident mitigation, and reliability" },
+];
+
+export default function TechnicalStudio() {
+  const navigate = useNavigate();
+
+  // Setup State
+  const [role, setRole] = useState("Full Stack Engineer");
+  const [customRole, setCustomRole] = useState("");
+  const [targetCompany, setTargetCompany] = useState("");
+  const [maxQuestions, setMaxQuestions] = useState(5);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeUploadedName, setResumeUploadedName] = useState("");
+  const [uploadingResume, setUploadingResume] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Active Session State
+  const [sessionId, setSessionId] = useState<number | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [answerText, setAnswerText] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Voice Mode (Speech Recognition & TTS)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // Evaluation Popup after each question
+  const [lastEval, setLastEval] = useState<{ score: number; feedback: string } | null>(null);
+
+  // Timer effect
+  useEffect(() => {
+    let timer: any;
+    if (sessionId && !lastEval) {
+      timer = setInterval(() => setElapsedSeconds((s) => s + 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [sessionId, lastEval]);
+
+  // Speech Recognition setup
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+      };
+
+      recognition.onerror = () => setIsRecording(false);
+      recognition.onend = () => setIsRecording(false);
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+      alert("Voice input is not supported in this browser. Please use Google Chrome or Edge.");
+      return;
+    }
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
+
+  const handleSpeakQuestion = (text: string) => {
+    if (!("speechSynthesis" in window)) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setResumeFile(file);
+    setUploadingResume(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await uploadResume(file);
+      setResumeUploadedName(res.resume_name);
+      setUploadSuccess(true);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.detail || "Failed to upload and index resume in ChromaDB.");
+    } finally {
+      setUploadingResume(false);
+    }
+  };
+
+  const handleStartInterview = async () => {
+    const activeRole = role === "Custom" ? customRole.trim() : role;
+    if (!activeRole) {
+      setErrorMsg("Please select or enter a target role.");
+      return;
+    }
+    setIsStarting(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await startTechnicalInterview({
+        role: activeRole,
+        target_company: targetCompany.trim() || undefined,
+        max_questions: maxQuestions,
+      });
+
+      setSessionId(res.session_id);
+      setCurrentQuestion(res.current_question);
+      setQuestionCount(0);
+      setElapsedSeconds(0);
+      setAnswerText("");
+      if (res.current_question?.text) {
+        handleSpeakQuestion(res.current_question.text);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.detail || "Failed to initialize technical interview session.");
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleSubmitAnswer = async () => {
+    if (!sessionId || !answerText.trim()) {
+      setErrorMsg("Please provide an answer before submitting.");
+      return;
+    }
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+
+    setIsSubmitting(true);
+    setErrorMsg(null);
+
+    try {
+      const res = await submitTechnicalAnswer(sessionId, answerText.trim());
+
+      setLastEval({
+        score: res.evaluation.score,
+        feedback: res.evaluation.feedback,
+      });
+
+      if (res.is_complete && res.report) {
+        // Complete -> go to report
+        setTimeout(() => {
+          navigate(`/technical/report/${sessionId}`);
+        }, 2200);
+      } else if (res.next_question) {
+        setCurrentQuestion(res.next_question);
+        setQuestionCount(res.question_count);
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.detail || "Failed to evaluate answer.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleContinueToNextQuestion = () => {
+    setLastEval(null);
+    setAnswerText("");
+    if (currentQuestion?.text) {
+      handleSpeakQuestion(currentQuestion.text);
+    }
+  };
+
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  // -------------------------------------------------------------------------
+  // RENDER: SETUP VIEW (If no active session)
+  // -------------------------------------------------------------------------
+  if (!sessionId) {
+    return (
+      <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-7xl mx-auto flex flex-col gap-8">
+        {/* Ambient Backdrop Aura */}
+        <div className="pointer-events-none absolute -top-40 right-1/4 w-[700px] h-[400px] bg-primary/10 rounded-full blur-[140px]" />
+        <div className="pointer-events-none absolute top-1/2 -left-20 w-[500px] h-[350px] bg-secondary-container/10 rounded-full blur-[120px]" />
+
+        {/* Header Breadcrumb & Title */}
+        <div className="relative z-10 flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-xs text-outline font-label-caps">
+            <span className="hover:text-on-surface cursor-pointer" onClick={() => navigate("/")}>Practice Arena</span>
+            <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+            <span className="text-secondary font-semibold">Track 01: Technical Interview</span>
+          </div>
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-secondary font-label-numeric-sm text-[11px] font-medium mb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
+              RAG Semantic &amp; Logic Telemetry
+            </div>
+            <h1 className="font-display-hero text-3xl sm:text-4xl font-extrabold text-on-surface tracking-tight">
+              Technical System Design &amp; Logic Articulation
+            </h1>
+            <p className="font-body-lg text-sm text-on-surface-variant max-w-3xl leading-relaxed mt-1">
+              Practice conversational technical interviews grounded in your actual projects. Powered by
+              RAG semantic resume indexing, LangGraph state orchestration, and real-time Nemotron evaluation.
+            </p>
+          </div>
+        </div>
+
+        {errorMsg && (
+          <div className="p-4 rounded-xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">error</span>
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column: Role & Config (7 Cols) */}
+          <div className="lg:col-span-7 flex flex-col gap-6">
+            {/* Target Role Selector */}
+            <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-4 shadow-lg">
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider">
+                  Select Target Engineering Role
+                </span>
+                <span className="text-xs text-outline font-label-numeric-sm">Step 1 of 3</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {ROLE_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setRole(p.label);
+                      setCustomRole("");
+                    }}
+                    className={`p-4 rounded-xl text-left border transition-all flex flex-col justify-between gap-2 ${
+                      role === p.label
+                        ? "bg-secondary-container/20 border-secondary text-on-surface shadow-md shadow-secondary/10"
+                        : "bg-surface-container border-outline-variant/20 hover:border-outline-variant/60 text-on-surface-variant"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="material-symbols-outlined text-secondary text-[22px]">{p.icon}</span>
+                      {role === p.label && (
+                        <span className="material-symbols-outlined text-secondary text-[18px]">check_circle</span>
+                      )}
+                    </div>
+                    <span className="font-headline-sm text-sm font-semibold text-on-surface">{p.label}</span>
+                    <span className="text-[11px] text-outline leading-tight">{p.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Role Input */}
+              <div className="pt-2">
+                <label className="text-xs text-outline font-label-caps uppercase block mb-1.5 font-semibold">
+                  Or Specify Custom Specialization
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Distributed Database Engineer, Computer Vision Architect..."
+                  value={customRole}
+                  onChange={(e) => {
+                    setCustomRole(e.target.value);
+                    setRole("Custom");
+                  }}
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-surface-container border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-secondary transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Target Company & Question Depth */}
+            <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-4 shadow-lg">
+              <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider">
+                Interview Environment & Depth
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-outline font-label-caps uppercase block mb-1.5 font-semibold">
+                    Target Company (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Google, Stripe, Uber, Early-stage Seed"
+                    value={targetCompany}
+                    onChange={(e) => setTargetCompany(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-lg bg-surface-container border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-secondary transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-outline font-label-caps uppercase block mb-1.5 font-semibold">
+                    Number of Interview Questions
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {[3, 5, 7].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setMaxQuestions(num)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold font-label-numeric border transition-all ${
+                          maxQuestions === num
+                            ? "bg-secondary text-on-secondary border-secondary font-bold shadow-sm"
+                            : "bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high"
+                        }`}
+                      >
+                        {num} Questions
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: RAG Resume Ingestion (5 Cols) */}
+          <div className="lg:col-span-5 flex flex-col gap-6">
+            <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-4 shadow-lg">
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-xs uppercase text-primary font-bold tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[18px]">description</span>
+                  RAG Resume Grounding
+                </span>
+                <span className="font-label-numeric-sm text-[10px] px-2 py-0.5 rounded bg-surface-container text-outline">
+                  ChromaDB
+                </span>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Upload your engineering resume (PDF). Our local vector pipeline chunks and indexes your background
+                so the interviewer interrogates your actual past architectural choices.
+              </p>
+
+              {/* Upload Dropzone */}
+              <label className="relative border-2 border-dashed border-outline-variant/40 hover:border-primary/60 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-surface-container/50 hover:bg-surface-container">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleResumeUpload}
+                  className="hidden"
+                  disabled={uploadingResume}
+                />
+                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                  <span className="material-symbols-outlined text-[24px]">
+                    {uploadingResume ? "sync" : "cloud_upload"}
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-on-surface mb-0.5">
+                  {uploadingResume
+                    ? "Chunking and vector-indexing..."
+                    : resumeUploadedName
+                    ? `Indexed: ${resumeUploadedName}`
+                    : "Click to upload engineering resume (PDF)"}
+                </span>
+                <span className="text-[10px] text-outline">
+                  {uploadSuccess ? "Embedded with all-MiniLM-L6-v2 in ChromaDB" : "Supports standard 1-2 page PDFs"}
+                </span>
+              </label>
+
+              {uploadSuccess && (
+                <div className="p-3 rounded-lg bg-tertiary-container/20 border border-tertiary/30 text-tertiary text-xs flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px]">verified</span>
+                  <span>Resume parsed & embedded into vector collection!</span>
+                </div>
+              )}
+            </div>
+
+            {/* Launch Action Card */}
+            <div className="p-6 rounded-xl bg-gradient-to-br from-surface-container-low via-surface-container to-surface-container-high border border-outline-variant/30 flex flex-col gap-4 shadow-xl">
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-xs uppercase text-outline font-semibold">Ready to begin</span>
+                <span className="font-label-numeric-sm text-xs text-secondary font-bold">20-30 mins</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleStartInterview}
+                disabled={isStarting}
+                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-secondary via-primary to-primary hover:opacity-90 transition-all text-white font-headline-sm text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-secondary/20 cursor-pointer disabled:opacity-50"
+              >
+                {isStarting ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-[20px]">refresh</span>
+                    <span>Synthesizing Interview Question 1...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Launch Technical Drill</span>
+                    <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // RENDER: LIVE INTERVIEW STUDIO
+  // -------------------------------------------------------------------------
+  return (
+    <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-6xl mx-auto flex flex-col gap-6">
+      {/* Ambient Backdrop Aura */}
+      <div className="pointer-events-none absolute -top-40 right-1/4 w-[700px] h-[400px] bg-primary/10 rounded-full blur-[140px]" />
+      <div className="pointer-events-none absolute top-1/2 -left-20 w-[500px] h-[350px] bg-secondary-container/10 rounded-full blur-[120px]" />
+
+      {/* Studio Top Control Strip */}
+      <div className="relative z-10 flex items-center justify-between p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center">
+            <span className="material-symbols-outlined text-[22px]">terminal</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="font-headline-sm text-sm font-bold text-on-surface">{role}</span>
+            <span className="text-[11px] text-outline font-label-caps uppercase font-medium">
+              {targetCompany ? `Target: ${targetCompany}` : "Technical Evaluation Round"}
+            </span>
+          </div>
+        </div>
+
+        {/* Stepper & Timer */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 font-label-numeric-sm text-xs text-on-surface bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/20">
+            <span className="material-symbols-outlined text-[16px] text-tertiary">schedule</span>
+            <span>{formatTimer(elapsedSeconds)}</span>
+          </div>
+          <div className="font-label-caps text-xs px-3 py-1.5 rounded-lg bg-secondary-container/20 text-secondary font-bold">
+            Question {questionCount + 1} of {maxQuestions}
+          </div>
+        </div>
+      </div>
+
+      {errorMsg && (
+        <div className="p-3.5 rounded-xl bg-error-container/20 border border-error/30 text-error text-xs flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">error</span>
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {/* Main Question Bento Box */}
+      <div className="p-6 sm:p-8 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col gap-5 relative overflow-hidden">
+        <div className="flex items-center justify-between">
+          <span className="font-label-caps text-xs uppercase tracking-wider text-secondary font-bold flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]">psychology</span>
+            {currentQuestion?.type ? `${currentQuestion.type.toUpperCase()} CHALLENGE` : "TECHNICAL CHALLENGE"}
+          </span>
+          <button
+            type="button"
+            onClick={() => currentQuestion?.text && handleSpeakQuestion(currentQuestion.text)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-surface-container hover:bg-surface-container-high text-xs text-secondary font-medium transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              {isSpeaking ? "volume_off" : "volume_up"}
+            </span>
+            <span>{isSpeaking ? "Stop Audio" : "Read Aloud"}</span>
+          </button>
+        </div>
+
+        <p className="font-headline-md text-lg sm:text-xl text-on-surface font-semibold leading-relaxed">
+          {currentQuestion?.text || "Synthesizing scenario question..."}
+        </p>
+
+        <div className="flex items-center gap-2 pt-1 border-t border-outline-variant/20 text-[11px] text-outline font-label-caps">
+          <span className="material-symbols-outlined text-[14px] text-secondary">verified</span>
+          <span>Grounding: ChromaDB Semantic Resume Chunks & Architecture Scenarios</span>
+        </div>
+      </div>
+
+      {/* Answer Input Bento Box */}
+      <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <span className="font-label-caps text-xs uppercase text-outline font-semibold tracking-wider">
+            Your Spoken or Written Response
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleRecording}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm ${
+                isRecording
+                  ? "bg-error text-white animate-pulse"
+                  : "bg-surface-container hover:bg-surface-container-high text-on-surface"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {isRecording ? "mic" : "mic_none"}
+              </span>
+              <span>{isRecording ? "Recording Voice..." : "Voice Mode"}</span>
+            </button>
+          </div>
+        </div>
+
+        <textarea
+          rows={6}
+          value={answerText}
+          onChange={(e) => setAnswerText(e.target.value)}
+          placeholder="Articulate your thought process clearly. Structure your reasoning, state architectural trade-offs, and reference concrete engineering milestones..."
+          className="w-full p-4 rounded-xl bg-surface-container border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-secondary transition-colors resize-y leading-relaxed font-body-md"
+        />
+
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-outline font-label-numeric-sm">
+            {answerText.trim().split(/\s+/).filter(Boolean).length} words
+          </span>
+
+          <button
+            type="button"
+            onClick={handleSubmitAnswer}
+            disabled={isSubmitting || !answerText.trim()}
+            className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-on-secondary font-headline-sm text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-secondary/20 cursor-pointer disabled:opacity-40"
+          >
+            {isSubmitting ? (
+              <>
+                <span className="material-symbols-outlined animate-spin text-[16px]">refresh</span>
+                <span>Evaluating Response with Nemotron...</span>
+              </>
+            ) : (
+              <>
+                <span>Submit & Next</span>
+                <span className="material-symbols-outlined text-[16px]">send</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Instant Feedback Modal Drawer between questions */}
+      {lastEval && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="max-w-lg w-full bg-surface-container-low border border-outline-variant/40 rounded-2xl p-6 sm:p-7 shadow-2xl flex flex-col gap-5">
+            <div className="flex items-center justify-between">
+              <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px]">verified</span>
+                Evaluator Feedback
+              </span>
+              <span className="font-label-numeric text-base text-tertiary font-extrabold bg-tertiary-container/30 px-2.5 py-0.5 rounded-full">
+                Score: {lastEval.score}/10
+              </span>
+            </div>
+
+            <p className="text-sm text-on-surface leading-relaxed font-body-md">
+              {lastEval.feedback}
+            </p>
+
+            <button
+              type="button"
+              onClick={handleContinueToNextQuestion}
+              className="w-full py-3 rounded-xl bg-secondary text-on-secondary font-headline-sm text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-secondary/20 hover:opacity-95 transition-opacity"
+            >
+              <span>Continue to Next Question</span>
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

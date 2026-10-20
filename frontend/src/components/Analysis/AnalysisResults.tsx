@@ -387,7 +387,11 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             <div className="flex flex-col">
               <span className="text-xs font-semibold text-on-surface">Psychometric Cognitive Assessment</span>
               <span className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">
-                High cognitive resilience was maintained under speaking flow. Response initiation latency averaged 1.2s, indicating deliberate thought structuring without frozen hesitations.
+                {report?.congruence?.analysis
+                  ? report.congruence.analysis
+                  : fillersCount === 0
+                  ? `Exceptional cognitive flow maintained across ${durationSec}s. Spoke at a steady ${pace} WPM with zero hesitation disfluencies.`
+                  : `Cognitive load manifested in ${fillersCount} hesitation event(s). Pacing averaged ${pace} WPM across ${timeFormatted}.`}
               </span>
             </div>
           </div>
@@ -403,7 +407,7 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
                 <h3 className="font-headline-sm text-base text-on-surface font-bold">Filler Density Analysis</h3>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-tertiary/10 text-tertiary font-label-numeric-sm text-xs font-bold">
-                {fillersCount === 0 ? "0.0% (Flawless)" : `${(fillersCount * 0.3).toFixed(1)}% (Clean)`}
+                {fillersCount === 0 ? "0.0% (Flawless)" : `${(fillersCount * 0.4).toFixed(1)}% (${fillersCount} Detected)`}
               </span>
             </div>
 
@@ -411,23 +415,35 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
               <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
                 <span className="text-xs text-outline">“basically”</span>
                 <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {session.analysis?.filler_words_list?.basically || 1}x
+                  {session.analysis?.filler_words_list?.basically ?? 0}x
                 </span>
-                <span className="font-label-caps text-[10px] text-error mt-0.5 font-medium">Sec 04</span>
+                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
+                  (session.analysis?.filler_words_list?.basically ?? 0) > 0 ? "text-error" : "text-outline"
+                }`}>
+                  {(session.analysis?.filler_words_list?.basically ?? 0) > 0 ? "Detected" : "Clean"}
+                </span>
               </div>
               <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
                 <span className="text-xs text-outline">“you know”</span>
                 <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {session.analysis?.filler_words_list?.["you know"] || 0}x
+                  {session.analysis?.filler_words_list?.["you know"] ?? 0}x
                 </span>
-                <span className="font-label-caps text-[10px] text-outline mt-0.5 font-medium">Clean</span>
+                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
+                  (session.analysis?.filler_words_list?.["you know"] ?? 0) > 0 ? "text-error" : "text-outline"
+                }`}>
+                  {(session.analysis?.filler_words_list?.["you know"] ?? 0) > 0 ? "Detected" : "Clean"}
+                </span>
               </div>
               <div className="bg-surface-container p-3 rounded-lg flex flex-col items-center text-center">
                 <span className="text-xs text-outline">“uh / um”</span>
                 <span className="font-label-numeric text-base text-on-surface font-bold mt-1">
-                  {(session.analysis?.filler_words_list?.um || 0) + (session.analysis?.filler_words_list?.uh || 0)}x
+                  {(session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0) + (session.analysis?.filler_words_list?.umm ?? 0) + (session.analysis?.filler_words_list?.uhh ?? 0)}x
                 </span>
-                <span className="font-label-caps text-[10px] text-tertiary mt-0.5 font-medium">Controlled</span>
+                <span className={`font-label-caps text-[10px] mt-0.5 font-medium ${
+                  ((session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0)) > 0 ? "text-error" : "text-tertiary"
+                }`}>
+                  {((session.analysis?.filler_words_list?.um ?? 0) + (session.analysis?.filler_words_list?.uh ?? 0)) > 0 ? "Flagged" : "Controlled"}
+                </span>
               </div>
             </div>
 
@@ -435,16 +451,33 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             <div className="flex flex-col gap-1.5">
               <div className="flex justify-between items-center text-[10px] text-outline font-medium">
                 <span>0s</span>
-                <span>30s Midpoint</span>
+                <span>Midpoint</span>
                 <span>{timeFormatted}</span>
               </div>
               <div className="relative w-full h-5 bg-surface-container rounded-lg overflow-hidden flex items-center px-2">
-                <div className="absolute left-[12%] w-1.5 h-3 bg-secondary rounded-full" title="0:04 - filler" />
-                <div className="absolute left-[45%] w-2 h-3.5 bg-error rounded-full" title="0:24 - pause" />
-                <div className="absolute left-[72%] w-1.5 h-3 bg-secondary rounded-full" title="0:44 - transition" />
+                {report?.filler_timeline && report.filler_timeline.length > 0 ? (
+                  report.filler_timeline.map((item, idx) => {
+                    const pct = Math.min(94, Math.max(3, (item.timestamp_sec / Math.max(1, durationSec)) * 100));
+                    return (
+                      <div
+                        key={idx}
+                        className={`absolute w-2 h-3.5 rounded-full ${
+                          item.level === "error" ? "bg-error" : "bg-secondary"
+                        }`}
+                        style={{ left: `${pct}%` }}
+                        title={`${item.timestamp_label} - "${item.word}"`}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="w-full text-center text-[10px] text-tertiary font-medium">
+                    Zero filler disfluencies on timeline
+                  </div>
+                )}
               </div>
             </div>
           </div>
+
 
           {/* Dynamic Pacing Fluctuations Card */}
           <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 shadow-lg flex flex-col gap-4">
@@ -481,8 +514,20 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
           <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-5 shadow-lg flex items-center justify-between">
             <div className="flex flex-col gap-0.5">
               <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">Acoustic Impression</span>
-              <span className="font-headline-sm text-sm text-on-surface font-bold">Authoritative &amp; Collaborative</span>
-              <span className="text-xs text-tertiary font-medium">Zero defensive cadence detected</span>
+              <span className="font-headline-sm text-sm text-on-surface font-bold">
+                {score >= 82
+                  ? "Authoritative & Collaborative"
+                  : score >= 70
+                  ? "Engaged & Structured"
+                  : "Developing Articulation"}
+              </span>
+              <span className="text-xs text-tertiary font-medium">
+                {pace >= 125 && pace <= 165
+                  ? "Optimal executive speaking cadence"
+                  : pace < 125
+                  ? "Measured acoustic tempo with deliberate pauses"
+                  : "Accelerated speech pace detected"}
+              </span>
             </div>
             <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary">
               <span className="material-symbols-outlined text-[24px]">graphic_eq</span>
@@ -490,6 +535,7 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
           </div>
         </div>
       </div>
+
 
       {/* AI Executive Coaching: Critical Moment Rewrites & Targeted Drills */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

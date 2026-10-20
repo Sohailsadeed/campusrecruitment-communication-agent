@@ -9,7 +9,7 @@ export default function TechnicalReport() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPlayingTTS, setIsPlayingTTS] = useState(false);
-  const [expandedQuestion, setExpandedQuestion] = useState<number | null>(0);
+  const [expandedQuestions, setExpandedQuestions] = useState<Record<number, boolean>>({});
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
@@ -19,6 +19,14 @@ export default function TechnicalReport() {
         setLoading(true);
         const data = await getTechnicalReport(Number(sessionId));
         setReportData(data);
+        // Expand all questions by default so candidate immediately sees articulations and AI feedbacks
+        if (data?.questions) {
+          const openMap: Record<number, boolean> = {};
+          data.questions.forEach((_, idx) => {
+            openMap[idx] = true;
+          });
+          setExpandedQuestions(openMap);
+        }
       } catch (err: any) {
         setError(err?.response?.data?.detail || "Failed to load technical interview report.");
       } finally {
@@ -270,12 +278,31 @@ export default function TechnicalReport() {
             <span className="material-symbols-outlined text-secondary text-[22px]">list_alt</span>
             <span>Question Breakdown & Telemetry</span>
           </h2>
-          <span className="text-xs text-outline font-label-numeric-sm">{questions.length} Questions</span>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                const areAllOpen = questions.every((_, idx) => expandedQuestions[idx]);
+                const nextState: Record<number, boolean> = {};
+                questions.forEach((_, idx) => {
+                  nextState[idx] = !areAllOpen;
+                });
+                setExpandedQuestions(nextState);
+              }}
+              className="text-xs text-primary hover:text-primary-fixed-dim font-medium transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[16px]">
+                {questions.every((_, idx) => expandedQuestions[idx]) ? "unfold_less" : "unfold_more"}
+              </span>
+              <span>{questions.every((_, idx) => expandedQuestions[idx]) ? "Collapse All" : "Expand All"}</span>
+            </button>
+            <span className="text-xs text-outline font-label-numeric-sm">{questions.length} Questions</span>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3">
           {questions.map((q, idx) => {
-            const isExpanded = expandedQuestion === idx;
+            const isExpanded = !!expandedQuestions[idx];
             const qScore = q.score !== undefined ? q.score : 0;
             return (
               <div
@@ -285,7 +312,12 @@ export default function TechnicalReport() {
                 {/* Accordion Header */}
                 <button
                   type="button"
-                  onClick={() => setExpandedQuestion(isExpanded ? null : idx)}
+                  onClick={() =>
+                    setExpandedQuestions((prev) => ({
+                      ...prev,
+                      [idx]: !prev[idx],
+                    }))
+                  }
                   className="w-full p-4 sm:p-5 flex items-center justify-between gap-4 text-left hover:bg-surface-container transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -316,33 +348,38 @@ export default function TechnicalReport() {
                 {isExpanded && (
                   <div className="px-5 pb-5 pt-2 border-t border-outline-variant/20 flex flex-col gap-4 bg-surface-container/30">
                     <div>
-                      <span className="font-label-caps text-[10px] uppercase text-secondary font-bold block mb-1">
-                        Full Question
+                      <span className="font-label-caps text-[10px] uppercase text-secondary font-bold flex items-center gap-1 mb-1">
+                        <span className="material-symbols-outlined text-[14px]">help_outline</span>
+                        Interview Challenge
                       </span>
                       <p className="text-xs sm:text-sm text-on-surface leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20">
                         {q.text}
                       </p>
                     </div>
 
-                    {q.answer && (
+                    {q.answer ? (
                       <div>
-                        <span className="font-label-caps text-[10px] uppercase text-outline font-semibold block mb-1">
+                        <span className="font-label-caps text-[10px] uppercase text-outline font-semibold flex items-center gap-1 mb-1">
+                          <span className="material-symbols-outlined text-[14px]">record_voice_over</span>
                           Candidate Articulation
                         </span>
-                        <p className="text-xs text-on-surface-variant leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20">
+                        <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20 whitespace-pre-line">
                           {q.answer}
                         </p>
                       </div>
+                    ) : (
+                      <div className="text-xs text-outline italic">No spoken articulation recorded for this question.</div>
                     )}
 
                     {q.feedback && (
                       <div>
-                        <span className="font-label-caps text-[10px] uppercase text-tertiary font-bold block mb-1">
-                          Nemotron Architectural Critique
+                        <span className="font-label-caps text-[10px] uppercase text-tertiary font-bold flex items-center gap-1 mb-1">
+                          <span className="material-symbols-outlined text-[14px]">psychology</span>
+                          Nemotron Architectural Critique &amp; Feedback
                         </span>
-                        <p className="text-xs text-on-surface leading-relaxed font-body-md bg-tertiary-container/10 p-3.5 rounded-lg border border-tertiary/20">
+                        <div className="text-xs sm:text-sm text-on-surface leading-relaxed font-body-md bg-tertiary-container/10 p-3.5 rounded-lg border border-tertiary/20 whitespace-pre-line">
                           {q.feedback}
-                        </p>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import { useEffect } from "react";
 import AnalysisResults from "../components/Analysis/AnalysisResults";
 import Loading from "../components/Common/Loading";
@@ -13,13 +13,19 @@ export default function AnalysisPage() {
   const analyze = useAnalyzeSession();
 
   useEffect(() => {
-    if (data && data.status === "pending" && !analyze.isPending) {
+    // Only trigger JAM audio prosody analysis for JAM rounds, not technical round interviews
+    if (data && data.round_type !== "technical" && data.status === "pending" && !analyze.isPending) {
       analyze.mutate(data.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id]);
+  }, [data?.id, data?.round_type]);
 
   if (isLoading) return <Loading label="Loading session" />;
+
+  // Dedicated routing: technical interviews render the Technical Dossier Report
+  if (data?.round_type === "technical") {
+    return <Navigate to={`/technical/report/${data.id}`} replace />;
+  }
   if (error || !data) {
     return (
       <Card>

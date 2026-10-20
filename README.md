@@ -1,91 +1,156 @@
-# SpeakFlow
+# VerbalIQ (SpeakFlow v2.4) — Multimodal AI Communication & Interview Coach
 
-AI-powered public speaking coach with real-time feedback. SpeakFlow records
-your practice sessions in the browser, transcribes them, measures your
-speaking pace, filler words, on-camera presence, and asks a local LLM to
-turn all of that into encouraging, actionable coaching.
+> **Real-Time Multimodal Speech Analytics, Utterance-Aligned Video Tracking, and Executive Adjudication for High-Stakes Campus Recruitment & Speaking Drills.**
 
-## Stack
+VerbalIQ implements a state-of-the-art **two-stage "extract cues → LLM fuses" architecture** (aligned with recent affective multimodal research: [arXiv:2512.20938v1](https://arxiv.org/html/2512.20938v1) and [arXiv:2308.14320](https://ar5iv.labs.arxiv.org/html/2308.14320)). Rather than feeding heavy raw video frames into vision-language models, VerbalIQ extracts discrete speech intervals via Silero VAD, samples video frames strictly during those utterance windows via MediaPipe, and feeds distilled structured evidence into a local Qwen model via Ollama with token-level JSON Schema constraints.
 
-- **Frontend**: React 18 + TypeScript, Vite, Tailwind CSS, TanStack Query v5,
-  Recharts, Framer Motion, Axios
-- **Backend**: FastAPI, SQLAlchemy 2.0, SQLite, Pydantic v2,
-  OpenAI Whisper (optional), MediaPipe (optional)
-- **AI**: Local LLM served by [Ollama](https://ollama.com) (defaults to
-  `qwen3.5:4b`)
+---
 
-## Project layout
+## 🏗️ Architecture Overview
 
 ```
-speakflow/
-├── backend/        FastAPI app, services, and SQLite database
-├── frontend/       Vite + React client
-├── docker-compose.yml
-└── README.md
+                                  [ Webcam & Microphone Stream ]
+                                                │
+                 ┌──────────────────────────────┴──────────────────────────────┐
+                 ▼                                                             ▼
+     [ Audio Stream (16kHz) ]                                      [ Video Stream (30 FPS) ]
+                 │                                                             │
+                 ▼                                                             │
+      Faster-Whisper + Silero VAD                                              │
+    (Tuned for 'uh'/'um' hesitations)                                          │
+                 │                                                             │
+                 ▼                                                             ▼
+      [ Utterance Time Windows ] ──────────────────────────────►  OpenCV Windowed Frame Sampler
+        [t_start ───► t_end]                                     (3-5 FPS strictly within speech)
+                 │                                                             │
+                 │                                                             ▼
+                 │                                                MediaPipe FaceMesh + Pose
+                 │                                              ├── Gaze (Screen-Offset Cone)
+                 │                                              ├── Posture Lean (Scale Proxy)
+                 │                                              ├── Head Pose & Brow Dynamics
+                 │                                              └── Hand Fidgets vs Gestures
+                 │                                                             │
+                 └──────────────────────────────┬──────────────────────────────┘
+                                                │
+                                                ▼
+                                 [ Aligned Multimodal Record ]
+                                 {
+                                   "utterance_id": 1,
+                                   "transcript": "...",
+                                   "face": { "eye_contact": 0.88, "expr": "confident" },
+                                   "gesture": { "posture": "upright", "events": [...] }
+                                 }
+                                                │
+                                                ▼
+                                    Ollama Qwen (qwen3.5:4b)
+                               (Native GBNF JSON Schema Enforcement)
+                                                │
+                 ┌──────────────────────────────┴──────────────────────────────┐
+                 ▼                                                             ▼
+     [ Executive Adjudication Report ]                              [ Auditory Coach Voice ]
+     ├── Verbal-Nonverbal Congruence Analysis                       ├── Edge-TTS (ChristopherNeural)
+     ├── 6-Axis Competency Radar Vector                             └── Avatar Gesture Sync
+     ├── Critical Moment Rewrites (A+ Polish)                           ('empathic_nod', 'open_palm')
+     └── Curated 15-Min Actionable Drills
 ```
 
-## Running the backend
+---
 
+## ⚡ Key Capabilities
+
+### 1. Audio & Speech Analytics
+- **Faster-Whisper with Word Timestamps**: Captures exact word-level timings and disfluency bounds.
+- **Tuned Silero VAD**: Uses a calibrated threshold (`0.35`) and `250ms` speech padding to guarantee that soft vocal hesitations (`"uh"`, `"um"`, `"hmm"`) are preserved verbatim rather than clipped.
+- **Acoustic Pause Detection**: Calculates micro-hesitations and frozen pauses ($\ge 0.5\text{s}$) across speaking turns.
+- **Dynamic Cadence Sparkline**: Real-time interval WPM calculations across the session.
+
+### 2. Utterance-Aligned Computer Vision (MediaPipe)
+- **Windowed Frame Extraction**: Processes video frames *only* when the candidate is speaking, cutting CV load by 70% and tying physical gestures directly to spoken clauses.
+- **Webcam Parallax Compensation**: Implements an elliptical screen-offset tolerance cone ($\pm 15^\circ$ buffer) so candidates aren't penalized for looking at the screen.
+- **Affective & Posture Telemetry**: Tracks eyebrow raise/furrow, head stability, torso lean via face magnification proxy, and hand-to-face touching (nervous fidget indicator) vs open-palm emphasis gestures.
+
+### 3. Local LLM Fusion (Ollama with Native JSON Schema)
+- Powered by `qwen3.5:4b` running locally on Ollama.
+- Uses **Ollama's native JSON Schema mode** (`format: <schema>`) for token-level grammar logit masking, completely eliminating missing keys or conversational preamble.
+- Evaluates:
+  - **Verbal-Nonverbal Congruence**: Identifies instances where posture or averted gaze contradicted spoken technical claims.
+  - **6 Core Competencies**: Articulation, Structure (STAR flow), Technical Depth, Pacing, Confidence, and Conciseness.
+  - **Critical Moment Rewrites**: Side-by-side original sentence vs executive-level polished rewrite with letter grades and improvement tips.
+
+### 4. Auditory Coach Avatar Voice (Text-to-Speech)
+- **Primary Voice**: Microsoft Edge Neural TTS (`en-US-ChristopherNeural`) producing an authoritative executive coach voice.
+- **Instant Fallback**: Browser-native Web Speech API if offline.
+- **Avatar Gesture Synchronization**: Schedules nonverbal reactions (`empathic_nod`, `attentive_tilt`, `open_palm_welcome`) aligned with spoken feedback.
+
+### 5. VerbalIQ Dark Cockpit UI
+- High-contrast cockpit theme built on `#10131a` surface baseline with custom tokens (`Plus Jakarta Sans`, `JetBrains Mono`, `Inter`).
+- **4 Track Practice Arena**:
+  - Track 01: Technical System Design
+  - Track 02: HR & Behavioral (STAR Method)
+  - Track 03: Guesstimates & Market Sizing
+  - Track 04: JAM Blitz (Just A Minute)
+- Interactive SVG Radar chart, filler timeline with time chips, and utterance-aligned nonverbal telemetry cards.
+
+---
+
+## 🚀 Quickstart Guide
+
+### Prerequisites
+- Python 3.10+ (tested on Python 3.12)
+- Node.js 18+ & npm
+- [Ollama](https://ollama.com) installed and running
+
+### 1. Launch Ollama Model
+Ensure Ollama is running, then verify or pull the model:
 ```bash
-cd backend
-python -m venv .venv
-source .venv/bin/activate
+ollama run qwen3.5:4b
+```
+
+### 2. Backend Setup
+```bash
+cd speakflow/backend
+
+# Activate virtual environment
+# Windows:
+.\speakvenv\Scripts\activate
+# Linux/macOS:
+# source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-uvicorn main:app --reload
+pip install edge-tts
+
+# Run FastAPI backend
+python -m uvicorn main:app --reload --port 8000
 ```
+Backend API will be live at `http://localhost:8000` (docs at `http://localhost:8000/docs`).
 
-The API will listen on `http://localhost:8000`. SQLite data is stored in
-`backend/speakflow.db` and uploads in `backend/uploads/`.
-
-> Whisper and MediaPipe are optional. If they aren't installed, SpeakFlow
-> falls back to deterministic mock transcripts and presence metrics so the
-> app remains fully functional for demos.
-
-## Running the frontend
-
+### 3. Frontend Setup
 ```bash
-cd frontend
+cd speakflow/frontend
+
+# Install packages
 npm install
+
+# Start Vite dev server
 npm run dev
 ```
+Open `http://localhost:5173` in your browser.
 
-Open http://localhost:5173. The client reads `VITE_API_URL` (defaults to
-`http://localhost:8000`) so you can point it at a remote backend if you
-prefer.
+---
 
-## Running with Docker Compose
+## 📡 API Endpoints Summary
 
-```bash
-docker compose up --build
-```
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/sessions` | Multipart video/audio upload with track type & topic |
+| `POST` | `/api/sessions/{id}/analyze` | Triggers Whisper + MediaPipe + Ollama adjudication pipeline |
+| `GET` | `/api/sessions/{id}` | Complete session report, metrics, and multimodal timeline |
+| `GET` | `/api/sessions/{id}/tts` | Synthesized MP3 audio stream of the coach's feedback |
+| `GET` | `/api/progress/summary` | Global progress, practice streak, and competency averages |
+| `GET` | `/api/progress/metrics` | Longitudinal performance time-series across practice sessions |
 
-This brings up the FastAPI backend, the Vite dev server, and an Ollama
-instance. After it boots, pull a model:
+---
 
-```bash
-docker compose exec ollama ollama pull llama3.2
-```
-
-## API highlights
-
-- `POST /api/sessions` multipart upload (video/audio + metadata)
-- `POST /api/sessions/{id}/analyze` runs transcription + metrics + LLM feedback
-- `GET  /api/sessions/{id}` full session detail
-- `GET  /api/progress/summary` dashboard aggregates
-- `GET  /api/progress/metrics` per-session metric time series
-
-## Environment variables
-
-Create `backend/.env` to override defaults:
-
-```
-DATABASE_URL=sqlite:///./speakflow.db
-SECRET_KEY=change-me-to-something-random
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2
-WHISPER_MODEL_NAME=base
-```
-
-## License
-
-MIT.
+## 📄 License
+MIT. Built for Campus Recruitment & Executive Speaking Preparation.

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { SessionDetail } from "../../types";
 
@@ -8,8 +8,56 @@ interface AnalysisResultsProps {
 
 export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const [rewriteIdx, setRewriteIdx] = useState(0);
+  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const report = session.report;
+
+  const toggleTTS = () => {
+    if (isPlayingTTS) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      window.speechSynthesis.cancel();
+      setIsPlayingTTS(false);
+      return;
+    }
+
+    const ttsUrl = `http://localhost:8000/api/sessions/${session.id}/tts`;
+    const audio = new Audio(ttsUrl);
+    audioRef.current = audio;
+
+    setIsPlayingTTS(true);
+
+    audio.play().catch(() => {
+      // Graceful fallback to Web Speech API
+      const textToSpeak = report?.feedback_content || session.feedback[0]?.content || "Session evaluation complete.";
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.rate = 1.0;
+      utterance.pitch = 0.95;
+      utterance.onend = () => setIsPlayingTTS(false);
+      utterance.onerror = () => setIsPlayingTTS(false);
+      window.speechSynthesis.speak(utterance);
+    });
+
+    audio.onended = () => setIsPlayingTTS(false);
+    audio.onerror = () => {
+      // Fallback to Web Speech API
+      const textToSpeak = report?.feedback_content || session.feedback[0]?.content || "Session evaluation complete.";
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.onend = () => setIsPlayingTTS(false);
+      utterance.onerror = () => setIsPlayingTTS(false);
+      window.speechSynthesis.speak(utterance);
+    };
+  };
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) audioRef.current.pause();
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
   const score = Math.round(session.overall_score || session.analysis?.clarity_score || 84);
   const pace = Math.round(session.analysis?.speaking_pace || 140);
   const fillersCount = session.analysis?.filler_words_count || 0;
@@ -201,8 +249,41 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             <p className="font-body-md text-xs sm:text-sm text-on-surface-variant max-w-xl leading-relaxed">
               {report?.feedback_content || session.feedback[0]?.content || "Candidate demonstrated disciplined delivery. Speech cadence remained focused with clear structural clarity."}
             </p>
+
+            {/* Auditory Adjudication Voice Player */}
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={toggleTTS}
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg border transition-all text-xs font-semibold shadow-sm ${
+                  isPlayingTTS
+                    ? "bg-tertiary text-on-tertiary border-tertiary shadow-md"
+                    : "bg-surface-container-high text-on-surface border-outline-variant/40 hover:bg-surface-container-highest"
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {isPlayingTTS ? "pause_circle" : "volume_up"}
+                </span>
+                <span>{isPlayingTTS ? "Pause Executive Coach" : "Listen to Coach Adjudication"}</span>
+              </button>
+
+              {isPlayingTTS && (
+                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary/10 border border-tertiary/30 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-1">
+                    <span className="w-1 h-3.5 bg-tertiary rounded-full animate-pulse" />
+                    <span className="w-1 h-5 bg-tertiary rounded-full animate-pulse delay-75" />
+                    <span className="w-1 h-2 bg-tertiary rounded-full animate-pulse delay-150" />
+                  </div>
+                  <span className="font-label-numeric-sm text-[11px] text-tertiary font-bold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[12px]">smart_toy</span>
+                    Avatar: {report?.avatar_reaction?.expression || "empathic_nod"}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
 
         {/* Session Telemetry Fast Stats Strip */}
         <div className="z-10 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-3 min-w-[280px]">

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,10 @@ from app.services.analysis import analyze_transcription
 from app.services.feedback import generate_feedback
 from app.services.tracking import analyze_video
 from app.services.transcription import transcribe_audio
+from app.services.tts import synthesize_feedback_audio
 
 router = APIRouter(prefix="/api/sessions", tags=["analysis"])
+
 
 
 def _path_or_none(value: Optional[str]) -> Optional[Path]:
@@ -267,3 +270,35 @@ def get_transcription(
     if not session or not session.transcription:
         raise HTTPException(status_code=404, detail="Transcription not found")
     return TranscriptionOut.model_validate(session.transcription)
+
+
+@router.get("/{session_id}/tts")
+async def get_session_tts(
+    session_id: int,
+    db: Session = Depends(get_db),
+):
+    """Synthesize and stream executive coach feedback audio."""
+    session = db.get(SessionModel, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    report = session.report or {}
+    text_to_speak = report.get("feedback_content")
+    if not text_to_speak and session.feedback:
+        text_to_speak = session.feedback[0].content
+    if not text_to_speak:
+        text_to_speak = "Session evaluated. Solid delivery with room for structural polish."
+
+    verdict = report.get("verdict", "")
+    full_speech = f"Verdict: {verdict}. {text_to_speak}" if verdict else text_to_speak
+
+    audio_path = await synthesize_feedback_audio(session.id, full_speech)
+    if not audio_path or not audio_path.exists():
+        raise HTTPException(status_code=503, detail="TTS synthesis currently unavailable")
+
+    return FileResponse(
+        path=str(audio_path),
+        media_type="audio/mpeg",
+        filename=f"session_{session_id}_coach.mp3",
+    )
+

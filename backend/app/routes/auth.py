@@ -87,3 +87,31 @@ def me(authorization: Optional[str] = Header(default=None), db: Session = Depend
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserOut.model_validate(user)
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    """Extract and validate JWT, or fallback to default local user for local studio drills."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        subject = decode_token(token)
+        if subject:
+            user = db.scalar(select(User).where(User.email == subject))
+            if user:
+                return user
+
+    # Fallback for dev / unauthenticated local use
+    user = db.scalar(select(User).order_by(User.id.asc()))
+    if not user:
+        user = User(
+            email="developer@verbaliq.local",
+            username="candidate",
+            full_name="Alex Rivera",
+            hashed_password=hash_password("verbaliq123"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user

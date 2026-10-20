@@ -129,6 +129,12 @@ def route_after_evaluation(state: InterviewState) -> Literal["generate_next_ques
     return "generate_next_question"
 
 
+def route_entrypoint(state: InterviewState) -> str:
+    if state.get("answer"):
+        return "evaluate_answer"
+    return "generate_first_question"
+
+
 # ---------------------------------------------------------------------------
 # State Graph Construction
 # ---------------------------------------------------------------------------
@@ -139,6 +145,15 @@ def _build_interview_graph():
     builder.add_node("evaluate_answer", evaluate_answer_node)
     builder.add_node("generate_next_question", generate_next_question_node)
     builder.add_node("generate_report", generate_report_node)
+
+    builder.add_conditional_edges(
+        START,
+        route_entrypoint,
+        {
+            "generate_first_question": "generate_first_question",
+            "evaluate_answer": "evaluate_answer",
+        },
+    )
 
     builder.add_conditional_edges(
         "evaluate_answer",

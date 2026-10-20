@@ -111,6 +111,7 @@ def transcribe_audio(
                     language="en",
                     suppress_tokens=[],               # Preserves um, uh, uhh, hmm verbatim
                     condition_on_previous_text=False, # No clean-up between sentences
+                    initial_prompt="A professional candidate speaking in an English workplace interview about communication skills, software engineering, teamwork, and leadership.",
                     vad_filter=True,                  # Native Silero VAD enabled
                     vad_parameters=dict(
                         threshold=0.35,              # Sensitive threshold: captures soft 'um' and 'uh'
@@ -121,6 +122,7 @@ def transcribe_audio(
                     beam_size=5,
                     word_timestamps=True,             # Word-level timing
                 )
+
 
 
                 transcript_parts: List[str] = []

@@ -47,6 +47,12 @@ class Session(Base):
     feedback: Mapped[List["AIFeedback"]] = relationship(  # type: ignore[name-defined]
         "AIFeedback", back_populates="session", cascade="all, delete-orphan"
     )
+    technical_detail: Mapped[Optional["TechnicalInterview"]] = relationship(  # type: ignore[name-defined]
+        "TechnicalInterview",
+        back_populates="session",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Transcription(Base):

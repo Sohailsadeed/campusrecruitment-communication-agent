@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     # Whisper
     whisper_model_name: str = "base"
 
-    # Technical Round (OpenAI, Redis, ChromaDB)
-    openai_api_key: str = ""
+    # Technical Round (OpenRouter Nemotron / Ollama fallback, Redis, ChromaDB)
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    chat_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
     redis_url: str = "redis://localhost:6379"
     chroma_host: str = "localhost"
     chroma_port: int = 8100

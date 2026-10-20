@@ -7,31 +7,32 @@ interface StatisticsCardsProps {
 }
 
 export default function StatisticsCards({ summary }: StatisticsCardsProps) {
+  const hasSessions = summary.total_sessions > 0;
   const items = [
     {
       label: "Total Drills",
-      value: summary.total_sessions + 39,
+      value: summary.total_sessions,
       sub: `${summary.completed_sessions} evaluated`,
       icon: Activity,
       color: "text-secondary",
     },
     {
       label: "Avg Eloquence",
-      value: `${Math.round(summary.avg_clarity_score)}%`,
-      sub: `Peak ${Math.round(summary.best_clarity)}%`,
+      value: hasSessions ? `${Math.round(summary.avg_clarity_score)}%` : "--",
+      sub: hasSessions ? `Peak ${Math.round(summary.best_clarity)}%` : "No takes yet",
       icon: Sparkles,
       color: "text-tertiary",
     },
     {
       label: "Speech Cadence",
-      value: `${Math.round(summary.avg_speaking_pace)} WPM`,
-      sub: `Target 140 WPM`,
+      value: hasSessions && summary.avg_speaking_pace > 0 ? `${Math.round(summary.avg_speaking_pace)} WPM` : "--",
+      sub: "Target 140 WPM",
       icon: Gauge,
       color: "text-primary",
     },
     {
       label: "Disfluency Rate",
-      value: `${(summary.total_filler_words * 0.4).toFixed(1)}%`,
+      value: hasSessions ? `${(summary.total_filler_words * 0.4).toFixed(1)}%` : "0.0%",
       sub: `${summary.total_filler_words} total fillers`,
       icon: Timer,
       color: "text-error",

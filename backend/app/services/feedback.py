@@ -94,7 +94,7 @@ FEEDBACK_JSON_SCHEMA = {
             },
         },
     },
-    "required": ["content", "score", "suggestions", "congruence", "competencies"],
+    "required": ["content", "score", "suggestions", "congruence", "competencies", "rewrites"],
 }
 
 
@@ -300,20 +300,26 @@ def _heuristic_feedback(
         lower_s = weak_sentence.lower()
         lower_topic = (topic or "").lower()
 
-        if "communication" in lower_s or "communication" in lower_topic or "work" in lower_s:
+        if any(w in lower_s for w in ["student", "college", "university", "institute", "year", "pursuing", "degree"]):
+            # Student / Self-Introductory Polish
+            polished_ver = "I am a pre-final year engineering student at the Institute of Technology, specializing in building distributed software systems and high-throughput backend applications."
+            tip = "Eliminate casual conversational qualifiers ('Okay, currently...') and immediately anchor your introduction with your academic discipline and core engineering focus."
+        elif "communication" in lower_s or "communication" in lower_topic or "work" in lower_s:
             polished_ver = "Effective communication plays a critical role in the workplace, aligning cross-functional teams and technical stakeholders across modern IT organizations to maintain operational clarity."
             tip = "Eliminate conversational openers ('So a...') and fragmented syntax. Lead with an authoritative thesis ('Effective communication plays a critical role...') and state the concrete organizational impact."
-        elif "system" in lower_topic or "technical" in lower_topic or "scale" in lower_s:
+        elif "system" in lower_topic or "technical" in lower_topic or "scale" in lower_s or "backend" in lower_s or "develop" in lower_s:
             polished_ver = "To eliminate latency bottlenecks under peak concurrency, we decoupled the ingestion tier using partitioned message queues, driving a 40% gain in pipeline throughput."
             tip = "Replace descriptive colloquialisms with architectural specifics and quantified performance outcomes."
         else:
-            # General executive synthesis
+            # Clean natural polish without robotic hallucinated templates
             cleaned_core = weak_sentence
-            for fl in ["basically", "you know", "like", "um", "uh", "so a ", "so, ", "well, "]:
-                cleaned_core = cleaned_core.replace(fl, "").replace(fl.capitalize(), "")
+            for fl in ["basically", "you know", "like", "um", "uh", "so a ", "so, ", "well, ", "okay, ", "okay "]:
+                cleaned_core = re.sub(r"\b" + re.escape(fl) + r"\b", "", cleaned_core, flags=re.IGNORECASE)
             cleaned_core = " ".join(cleaned_core.split()).strip()
-            polished_ver = f"From an executive perspective, {cleaned_core.lower()} by establishing clear operational ownership and measurable benchmarks."
-            tip = "Ground informal statements with direct ownership verbs and strategic milestones rather than colloquial qualifiers."
+            if cleaned_core:
+                cleaned_core = cleaned_core[0].upper() + cleaned_core[1:]
+            polished_ver = f"{cleaned_core}. Specifically, our primary objective was delivering reliable technical execution with high cross-team alignment."
+            tip = "Lead with direct assertive phrasing, eliminating conversational qualifiers and hesitation words."
 
         rewrites.append({
             "timestamp": "00:14",
@@ -389,9 +395,13 @@ def generate_feedback(
             )
             response.raise_for_status()
             data = response.json()
-            raw = data.get("response", "").strip()
+            raw = data.get("response", "").strip() or data.get("thinking", "").strip()
             if not raw:
                 continue
+            start_idx = raw.find("{")
+            end_idx = raw.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                raw = raw[start_idx : end_idx + 1]
             parsed = json.loads(raw)
 
             competencies = parsed.get("competencies") or fallback["competencies"]

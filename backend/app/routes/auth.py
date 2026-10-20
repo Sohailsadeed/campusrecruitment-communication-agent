@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.engine import get_db
@@ -65,7 +65,13 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
 
 @router.post("/login", response_model=Token)
 def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
-    user = db.scalar(select(User).where(User.email == payload.email))
+    identifier = payload.email.strip().lower()
+    user = db.scalar(
+        select(User).where(
+            (func.lower(User.email) == identifier)
+            | (func.lower(User.username) == identifier)
+        )
+    )
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -43,11 +43,18 @@ export default function AuthModal() {
         await login({ email: email.trim(), password });
       }
     } catch (err: any) {
-      const detail =
-        err?.response?.data?.detail ||
-        err?.message ||
-        "Authentication failed. Please verify credentials.";
-      setError(String(detail));
+      const rawDetail = err?.response?.data?.detail;
+      let errorMsg = "Authentication failed. Please verify credentials.";
+      if (typeof rawDetail === "string") {
+        errorMsg = rawDetail;
+      } else if (Array.isArray(rawDetail) && rawDetail.length > 0) {
+        errorMsg = rawDetail
+          .map((d: any) => d.msg || (typeof d === "string" ? d : JSON.stringify(d)))
+          .join(", ");
+      } else if (err?.message) {
+        errorMsg = err.message;
+      }
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -163,12 +170,12 @@ export default function AuthModal() {
 
           <div>
             <label className="text-xs text-outline font-label-caps uppercase block mb-1.5 font-semibold">
-              Email Address *
+              {isRegister ? "Email Address *" : "Email Address or Username *"}
             </label>
             <input
-              type="email"
+              type={isRegister ? "email" : "text"}
               required
-              placeholder="candidate@verbal.iq"
+              placeholder={isRegister ? "candidate@verbal.iq" : "developer@verbaliq.local or candidate"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-lg bg-surface-container border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-secondary transition-colors"

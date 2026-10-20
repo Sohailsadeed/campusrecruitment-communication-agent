@@ -212,27 +212,27 @@ def analyze_audio_prosody(
             elif delta < -10.0:
                 terminal_drop_count += 1
 
-    # 4. Synthesize 100% Pure Acoustic Confidence & Assertive Tone Score
-    # Baseline 84
-    conf_score = 84.0
+    # 4. Synthesize Dual-Factor Confidence Index:
+    # 50% Soundwave Pitch & Vocal Energy + 50% Fluency & Pause Control
+    
+    # Factor A: 50% Soundwave Pitch & Vocal Energy Projection
+    acoustic_sub = 88.0
+    acoustic_sub += (energy_stability_score - 80.0) * 0.4
+    acoustic_sub += (modulation_score - 80.0) * 0.3
+    acoustic_sub += min(6.0, terminal_drop_count * 1.5)
+    acoustic_sub -= uptalk_count * 6.0
+    acoustic_score = max(50.0, min(98.0, acoustic_sub))
 
-    # Vocal energy & projection bonus/penalty
-    conf_score += (energy_stability_score - 80.0) * 0.35
-
-    # Pitch modulation bonus/penalty
-    conf_score += (modulation_score - 80.0) * 0.25
-
-    # Uptalk penalty: ending statements like questions damages confidence
-    conf_score -= uptalk_count * 5.5
-
-    # Confident terminal drop bonus: decisive statement endings
-    conf_score += min(6.0, terminal_drop_count * 1.5)
-
-    # Silence pause penalty (dead zones > 2s hurt perceived poise)
+    # Factor B: 50% Fluency & Pause Control
+    fluency_sub = 92.0
     if longest_pause >= 2.0:
-        conf_score -= min(12.0, (longest_pause - 1.5) * 4.0)
+        fluency_sub -= min(25.0, (longest_pause - 1.5) * 6.0)
+    if total_pause_time > 4.0:
+        fluency_sub -= min(20.0, (total_pause_time - 3.0) * 3.0)
+    fluency_score = max(50.0, min(98.0, fluency_sub))
 
-    final_confidence = round(max(55.0, min(97.0, conf_score)), 1)
+    # Comprehensive Fusion: 50% Acoustic + 50% Fluency
+    final_confidence = round(0.50 * acoustic_score + 0.50 * fluency_score, 1)
 
     # 5. Tone Verdict & Feedback
     if uptalk_count >= 2:
@@ -250,6 +250,8 @@ def analyze_audio_prosody(
 
     return {
         "confidence_score": final_confidence,
+        "acoustic_subscore": round(acoustic_score, 1),
+        "fluency_subscore": round(fluency_score, 1),
         "vocal_energy_db": round(avg_energy_db, 1),
         "energy_stability_score": round(energy_stability_score, 1),
         "pitch_mean_hz": round(mean_pitch, 1),
@@ -267,17 +269,25 @@ def _deterministic_prosody_fallback(
     longest_pause: float,
     total_pause_time: float,
 ) -> Dict[str, Any]:
-    """Accurate fallback calculation when raw audio file is unavailable."""
-    base_conf = 85.0
+    """Accurate fallback calculation implementing the 50-50 fusion when audio is raw/streamed."""
+    # Factor A: 50% Acoustic dynamics baseline
+    acoustic_score = 88.0
+    
+    # Factor B: 50% Fluency & Pause control
+    fluency_sub = 92.0
     if longest_pause >= 2.0:
-        base_conf -= min(12.0, (longest_pause - 1.5) * 4.0)
+        fluency_sub -= min(25.0, (longest_pause - 1.5) * 6.0)
     if total_pause_time > 4.0:
-        base_conf -= min(8.0, (total_pause_time - 3.0) * 1.5)
+        fluency_sub -= min(20.0, (total_pause_time - 3.0) * 3.0)
+    fluency_score = max(50.0, min(98.0, fluency_sub))
 
-    final_conf = round(max(60.0, min(95.0, base_conf)), 1)
+    # Comprehensive Fusion: 50% Acoustic + 50% Fluency
+    final_conf = round(0.50 * acoustic_score + 0.50 * fluency_score, 1)
 
     return {
         "confidence_score": final_conf,
+        "acoustic_subscore": round(acoustic_score, 1),
+        "fluency_subscore": round(fluency_score, 1),
         "vocal_energy_db": -22.4,
         "energy_stability_score": 86.0,
         "pitch_mean_hz": 142.0,

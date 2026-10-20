@@ -534,6 +534,11 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
 
             {prosody && (
               <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-outline-variant/20">
+                {prosody.acoustic_subscore !== undefined && prosody.fluency_subscore !== undefined && (
+                  <span className="px-2 py-0.5 rounded bg-primary-container/20 text-[10px] font-label-numeric-sm text-primary font-semibold">
+                    Dual Index: 50% Acoustic ({prosody.acoustic_subscore}) + 50% Fluency ({prosody.fluency_subscore})
+                  </span>
+                )}
                 <span className="px-2 py-0.5 rounded bg-surface-container text-[10px] font-label-numeric-sm text-secondary font-medium">
                   {prosody.vocal_energy_db} dB Energy
                 </span>

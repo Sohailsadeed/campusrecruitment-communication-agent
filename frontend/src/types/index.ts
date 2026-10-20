@@ -67,6 +67,8 @@ export interface AvatarReaction {
 
 export interface ProsodyMetrics {
   confidence_score: number;
+  acoustic_subscore: number;
+  fluency_subscore: number;
   vocal_energy_db: number;
   energy_stability_score: number;
   pitch_mean_hz: number;

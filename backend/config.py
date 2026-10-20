@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # Whisper
     whisper_model_name: str = "base"
 
+    # Technical Round (OpenAI, Redis, ChromaDB)
+    openai_api_key: str = ""
+    redis_url: str = "redis://localhost:6379"
+    chroma_host: str = "localhost"
+    chroma_port: int = 8100
+    resume_upload_dir: Path = UPLOAD_DIR / "resumes"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -109,6 +109,13 @@ Speech & Acoustic Analytics:
 - Repeated content words: {repetition_count} ({repetition_list})
 - Calculated Score: {jam_score}/100 | Verdict: {jam_verdict}
 
+Acoustic Prosody & Vocal Dynamics (Physical Soundwave Analysis):
+- Acoustic Confidence Score: {prosody_confidence}/100
+- Vocal Energy Projection: {vocal_energy_db} dB (RMS power)
+- Tone Verdict: {tone_verdict}
+- Terminal Intonation: {terminal_drops} decisive downward drop(s), {uptalks} hesitant uptalk inflection(s)
+- Dynamic Pitch Modulation Score: {modulation_score}/100
+
 Visual & Nonverbal Signals (MediaPipe Utterance Tracking):
 - Overall Eye Contact Consistency: {eye_contact_percentage}%
 - Posture & Presence Score: {posture_quality}%
@@ -122,14 +129,14 @@ Transcript:
 
 As the Chief Coach:
 1. Deliver a concise 3-5 sentence adjudication addressing topic delivery, verbal clarity, nonverbal presence, and flow.
-2. Evaluate Verbal-Nonverbal Congruence: Determine whether the candidate's body posture, eye contact, and gestures matched their spoken intent (e.g. confident vs anxious disconfirmation).
+2. Evaluate Verbal-Nonverbal Congruence: Determine whether the candidate's body posture, gestures, and presence matched their spoken intent.
 3. Select 1 or 2 specific weak phrases/sentences from the transcript (especially where filler words, vagueness, or repetition occurred) and provide executive-level "Critical Moment Rewrites" side-by-side with original vs polished version, letter grades, and actionable tips.
 4. Score the 6 Core Competency Vectors (0-100 each):
    - Articulation & Acoustic Clarity
    - Structure & STAR Logic Flow
    - Technical Depth & Precision
    - Pacing & Strategic Pauses
-   - Confidence & Assertive Tone
+   - Confidence & Assertive Tone (IMPORTANT: Base Confidence & Tone strictly on physical vocal dynamics, energy, and decisive terminal intonation — completely decoupled from eye contact)
    - Conciseness (Low Fluff)
 5. Highlight 2-3 observed mastery points, 2 curated follow-up drills, and an Avatar Nonverbal Reaction Plan (e.g. empathic_nod, attentive_tilt, open_palm).
 
@@ -137,7 +144,12 @@ Respond ONLY with a JSON object adhering to the schema.
 """
 
 
-def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "General Topic") -> str:
+def _build_prompt(
+    metrics: Dict[str, Any],
+    transcript: str,
+    topic: str = "General Topic",
+    prosody_metrics: Optional[Dict[str, Any]] = None,
+) -> str:
     fillers = metrics.get("filler_words_list") or {}
     clean_fillers = {k: v for k, v in fillers.items() if k != "_jam"}
     filler_list = ", ".join(f"{k} x{v}" for k, v in clean_fillers.items()) or "none"
@@ -148,6 +160,8 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
     excerpt = (transcript or "").strip()
     if len(excerpt) > 800:
         excerpt = excerpt[:800] + "..."
+
+    prosody = prosody_metrics or metrics.get("prosody") or {}
 
     timeline = metrics.get("multimodal_timeline") or []
     timeline_lines = []
@@ -163,7 +177,7 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
             f"  * Utterance {u_id} [{item.get('start', 0)}s - {item.get('end', 0)}s]: "
             f"Expression={expr}, EyeContact={int(ec*100)}%, Posture={posture}, Gestures=[{events}]"
         )
-    multimodal_evidence = "\n".join(timeline_lines) if timeline_lines else "  * Stable upright presence with consistent eye contact."
+    multimodal_evidence = "\n".join(timeline_lines) if timeline_lines else "  * Stable upright presence with consistent delivery."
 
     return PROMPT_TEMPLATE.format(
         topic=topic or "Impromptu Speech",
@@ -177,6 +191,12 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
         repetition_list=rep_list,
         jam_score=metrics.get("jam_score", metrics.get("clarity_score", 70)),
         jam_verdict=metrics.get("jam_verdict", "Qualified"),
+        prosody_confidence=prosody.get("confidence_score", 84.0),
+        vocal_energy_db=prosody.get("vocal_energy_db", -22.0),
+        tone_verdict=prosody.get("tone_verdict", "Measured & Structured"),
+        terminal_drops=prosody.get("terminal_drop_count", 2),
+        uptalks=prosody.get("uptalk_count", 0),
+        modulation_score=prosody.get("pitch_modulation_score", 88.0),
         eye_contact_percentage=metrics.get("eye_contact_percentage", 82.0),
         posture_quality=metrics.get("posture_quality", 85.0),
         hand_gestures_count=metrics.get("hand_gestures_count", 2),
@@ -186,7 +206,12 @@ def _build_prompt(metrics: Dict[str, Any], transcript: str, topic: str = "Genera
     )
 
 
-def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech", transcript: str = "") -> Dict[str, Any]:
+def _heuristic_feedback(
+    metrics: Dict[str, Any],
+    topic: str = "Impromptu Speech",
+    transcript: str = "",
+    prosody_metrics: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Deterministic fallback feedback with VerbalIQ rewrites, competencies, and multimodal congruence."""
     pace = float(metrics.get("speaking_pace") or 0)
     fillers = int(metrics.get("filler_words_count") or 0)
@@ -198,6 +223,8 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
     ec = float(metrics.get("eye_contact_percentage") or 82.0)
     fidgets = int(metrics.get("fidget_count") or 0)
 
+    prosody = prosody_metrics or metrics.get("prosody") or {}
+
     parts: List[str] = [f"Adjudication for topic '{topic}': Verdict is {verdict} ({score:.0f}/100)."]
     suggestions: List[str] = []
 
@@ -206,7 +233,14 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
     base_struct = min(94, max(60, int(score + (2 if reps == 0 else -6))))
     base_tech = min(92, max(65, int(score + 3)))
     base_pace = min(95, max(58, int(92 - abs(pace - 145) * 0.6)))
-    base_conf = min(95, max(62, int(score - (3 if longest_pause > 2.0 else 0) - (4 if fidgets > 1 else 0))))
+
+    # Confidence is 100% derived from acoustic soundwave prosody (decoupled from eye contact / video)
+    if "confidence_score" in prosody:
+        base_conf = int(round(float(prosody["confidence_score"])))
+    else:
+        # Fallback acoustic confidence based solely on pauses and vocal flow, WITHOUT eye contact or fidgets
+        base_conf = min(96, max(60, int(score - (4 if longest_pause > 2.0 else 0) - (3 if pauses > 4.0 else 0))))
+
     base_concise = min(94, max(50, int(90 - fillers * 5 - reps * 4)))
 
     competencies = {
@@ -221,7 +255,7 @@ def _heuristic_feedback(metrics: Dict[str, Any], topic: str = "Impromptu Speech"
     if ec >= 80 and fidgets == 0:
         congruence = {
             "status": "High Alignment",
-            "analysis": f"Strong nonverbal grounding ({ec:.0f}% eye contact) reinforced spoken claims with steady posture.",
+            "analysis": f"Strong nonverbal presence reinforced spoken claims with steady posture.",
         }
     else:
         congruence = {
@@ -331,11 +365,13 @@ def generate_feedback(
     metrics: Dict[str, Any],
     transcript: str,
     topic: str = "Impromptu Speech",
+    prosody_metrics: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Generate comprehensive VerbalIQ feedback with rewrites, competencies, and multimodal congruence."""
-    prompt = _build_prompt(metrics, transcript, topic)
+    prosody = prosody_metrics or metrics.get("prosody") or {}
+    prompt = _build_prompt(metrics, transcript, topic, prosody_metrics=prosody)
     url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
-    fallback = _heuristic_feedback(metrics, topic, transcript)
+    fallback = _heuristic_feedback(metrics, topic, transcript, prosody_metrics=prosody)
 
     # 1. Attempt with exact JSON Schema
     for fmt in [FEEDBACK_JSON_SCHEMA, "json"]:
@@ -358,6 +394,11 @@ def generate_feedback(
                 continue
             parsed = json.loads(raw)
 
+            competencies = parsed.get("competencies") or fallback["competencies"]
+            # Enforce 100% DSP acoustic confidence — completely decoupled from video/eye contact
+            if "confidence_score" in prosody:
+                competencies["confidence"] = int(round(float(prosody["confidence_score"])))
+
             return {
                 "content": str(parsed.get("content", "")).strip() or fallback["content"],
                 "score": float(parsed.get("score", metrics.get("jam_score", 0)) or fallback["score"]),
@@ -365,7 +406,7 @@ def generate_feedback(
                 "congruence": parsed.get("congruence") or fallback["congruence"],
                 "avatar_reaction": parsed.get("avatar_reaction") or fallback["avatar_reaction"],
                 "rewrites": parsed.get("rewrites") or fallback["rewrites"],
-                "competencies": parsed.get("competencies") or fallback["competencies"],
+                "competencies": competencies,
                 "mastery_points": parsed.get("mastery_points") or fallback["mastery_points"],
                 "curated_drills": parsed.get("curated_drills") or fallback["curated_drills"],
             }

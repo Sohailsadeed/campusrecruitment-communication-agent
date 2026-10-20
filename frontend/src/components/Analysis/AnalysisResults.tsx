@@ -147,6 +147,11 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const verdictText = score >= 82 ? "Strong Hire Readiness" : score >= 70 ? "Promising Candidate" : "Developing Articulation";
   const percentile = score >= 85 ? "Top 8th Percentile" : score >= 75 ? "Top 20th Percentile" : "Top 40th Percentile";
 
+  // Acoustic Prosody & Physical Soundwave Signals (Decoupled from video)
+  const prosody = report?.prosody;
+  const toneVerdict = prosody?.tone_verdict || report?.metrics?.tone_verdict || (score >= 82 ? "Authoritative & Resonant" : score >= 70 ? "Measured & Structured" : "Developing Articulation");
+  const prosodyFeedback = prosody?.prosody_feedback || (pace >= 125 && pace <= 165 ? "Optimal executive speaking cadence" : pace < 125 ? "Measured acoustic tempo with deliberate pauses" : "Accelerated speech pace detected");
+
   return (
     <div className="px-4 sm:px-8 py-8 sm:py-10 flex flex-col gap-8 max-w-7xl mx-auto">
       {/* Top Metadata Breadcrumb & Live Action Bar */}
@@ -510,28 +515,45 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             </div>
           </div>
 
-          {/* Sentiment & Tone Card */}
-          <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-5 shadow-lg flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">Acoustic Impression</span>
-              <span className="font-headline-sm text-sm text-on-surface font-bold">
-                {score >= 82
-                  ? "Authoritative & Collaborative"
-                  : score >= 70
-                  ? "Engaged & Structured"
-                  : "Developing Articulation"}
-              </span>
-              <span className="text-xs text-tertiary font-medium">
-                {pace >= 125 && pace <= 165
-                  ? "Optimal executive speaking cadence"
-                  : pace < 125
-                  ? "Measured acoustic tempo with deliberate pauses"
-                  : "Accelerated speech pace detected"}
-              </span>
+          {/* Sentiment & Tone Card (Acoustic Prosody DSP) */}
+          <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-5 shadow-lg flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">Acoustic Impression &amp; Pitch DSP</span>
+                <span className="font-headline-sm text-sm text-on-surface font-bold">
+                  {toneVerdict}
+                </span>
+                <span className="text-xs text-tertiary font-medium">
+                  {prosodyFeedback}
+                </span>
+              </div>
+              <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary shrink-0">
+                <span className="material-symbols-outlined text-[24px]">graphic_eq</span>
+              </div>
             </div>
-            <div className="w-12 h-12 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary">
-              <span className="material-symbols-outlined text-[24px]">graphic_eq</span>
-            </div>
+
+            {prosody && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-outline-variant/20">
+                <span className="px-2 py-0.5 rounded bg-surface-container text-[10px] font-label-numeric-sm text-secondary font-medium">
+                  {prosody.vocal_energy_db} dB Energy
+                </span>
+                <span className="px-2 py-0.5 rounded bg-surface-container text-[10px] font-label-numeric-sm text-tertiary font-medium">
+                  {prosody.terminal_drop_count} Decisive Drops
+                </span>
+                {prosody.uptalk_count > 0 ? (
+                  <span className="px-2 py-0.5 rounded bg-error-container/30 text-[10px] font-label-numeric-sm text-error font-medium">
+                    {prosody.uptalk_count} Uptalk(s)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded bg-surface-container text-[10px] font-label-numeric-sm text-outline font-medium">
+                    0 Uptalk Inflections
+                  </span>
+                )}
+                <span className="px-2 py-0.5 rounded bg-surface-container text-[10px] font-label-numeric-sm text-outline font-medium">
+                  {prosody.pitch_modulation_score}/100 Modulation
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

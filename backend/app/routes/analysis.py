@@ -21,6 +21,7 @@ from app.models.session import (
 from app.schemas.session import SessionAnalysisOut, SessionDetailOut, TranscriptionOut
 from app.services.analysis import analyze_transcription
 from app.services.feedback import generate_feedback
+from app.services.prosody import analyze_audio_prosody
 from app.services.tracking import analyze_video
 from app.services.transcription import transcribe_audio
 from app.services.tts import synthesize_feedback_audio
@@ -120,14 +121,22 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             pause_metrics=pause_data,
         )
 
-        # 3. Video & Multimodal nonverbal metrics
+        # 3. Video & Multimodal nonverbal metrics (kept as-is for nonverbal timeline)
         extracted_segments = result.get("segments", [])
         video_metrics = analyze_video(
             _path_or_none(session.video_path),
             utterances=extracted_segments,
         )
 
-        combined = {**metrics, **video_metrics, **pause_data}
+        # 3b. Acoustic Prosody & Physical Soundwave DSP (100% decoupled from eye contact / video)
+        prosody_metrics = analyze_audio_prosody(
+            audio_path,
+            utterances=extracted_segments,
+            duration_seconds=session.duration_seconds,
+            pause_info=pause_data,
+        )
+
+        combined = {**metrics, **video_metrics, **pause_data, "prosody": prosody_metrics}
 
         filler_payload = {
             **combined["filler_words_list"],
@@ -165,7 +174,7 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
 
         # 4. AI feedback — evaluating topic adherence, hesitations, nonverbal congruence, and flow
         topic_name = session.title or "General Topic"
-        feedback_payload = generate_feedback(combined, transcription_text, topic=topic_name)
+        feedback_payload = generate_feedback(combined, transcription_text, topic=topic_name, prosody_metrics=prosody_metrics)
         existing_feedback = next(
             (f for f in session.feedback if f.feedback_type == "overall"), None
         )
@@ -207,6 +216,9 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             "posture_quality": float(combined.get("posture_quality", 85.0)),
             "hand_gestures_count": int(combined.get("hand_gestures_count", 0)),
             "fidget_count": int(combined.get("fidget_count", 0)),
+            "prosody_confidence": float(prosody_metrics.get("confidence_score", 84.0)),
+            "vocal_energy_db": float(prosody_metrics.get("vocal_energy_db", -22.0)),
+            "tone_verdict": str(prosody_metrics.get("tone_verdict", "Measured & Structured")),
         }
 
         session.report = {
@@ -225,6 +237,7 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             }),
             "rewrites": feedback_payload.get("rewrites", []),
             "competencies": feedback_payload.get("competencies", {}),
+            "prosody": prosody_metrics,
             "mastery_points": feedback_payload.get("mastery_points", []),
             "curated_drills": feedback_payload.get("curated_drills", []),
             "cadence_sparkline": cadence_sparkline,
@@ -239,6 +252,9 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 "repetitions_count": int(combined.get("repetitions_count", 0)),
                 "eye_contact_percentage": float(combined.get("eye_contact_percentage", 82.0)),
                 "posture_quality": float(combined.get("posture_quality", 85.0)),
+                "prosody_confidence": float(prosody_metrics.get("confidence_score", 84.0)),
+                "vocal_energy_db": float(prosody_metrics.get("vocal_energy_db", -22.0)),
+                "tone_verdict": str(prosody_metrics.get("tone_verdict", "Measured & Structured")),
             },
         }
 

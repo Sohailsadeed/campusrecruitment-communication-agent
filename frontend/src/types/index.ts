@@ -65,6 +65,19 @@ export interface AvatarReaction {
   timing?: string;
 }
 
+export interface ProsodyMetrics {
+  confidence_score: number;
+  vocal_energy_db: number;
+  energy_stability_score: number;
+  pitch_mean_hz: number;
+  pitch_std_hz: number;
+  pitch_modulation_score: number;
+  uptalk_count: number;
+  terminal_drop_count: number;
+  tone_verdict: string;
+  prosody_feedback: string;
+}
+
 export interface VerbalIQReport {
   total_score: number;
   verdict: string;
@@ -72,6 +85,7 @@ export interface VerbalIQReport {
   suggestions: string[];
   rewrites?: CriticalRewrite[];
   competencies?: CompetencyVector;
+  prosody?: ProsodyMetrics;
   mastery_points?: MasteryPoint[];
   curated_drills?: CuratedDrill[];
   cadence_sparkline?: number[];
@@ -88,6 +102,9 @@ export interface VerbalIQReport {
     repetitions_count: number;
     eye_contact_percentage?: number;
     posture_quality?: number;
+    prosody_confidence?: number;
+    vocal_energy_db?: number;
+    tone_verdict?: string;
   };
 }
 

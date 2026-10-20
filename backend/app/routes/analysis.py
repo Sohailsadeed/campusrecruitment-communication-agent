@@ -52,9 +52,13 @@ def _calculate_cadence_sparkline(words: list, duration_seconds: float, overall_p
 
 
 def _extract_filler_timeline(words: list, filler_dict: dict) -> list[dict]:
-    """Map occurrences of filler words to percentage offsets for timeline rendering."""
+    """Map occurrences of filler words and hesitations to timestamps for timeline rendering."""
     timeline = []
-    filler_set = {"basically", "you know", "uh", "um", "like", "actually", "literally"}
+    filler_set = {
+        "basically", "you know", "uh", "uhh", "um", "umm", "hmm",
+        "like", "actually", "literally", "er", "ah"
+    }
+    hesitation_set = {"uh", "uhh", "um", "umm", "hmm", "er", "ah", "basically", "like"}
     
     for w in words:
         cleaned = str(w.get("word", "")).strip().lower().strip(".,!?")
@@ -66,9 +70,10 @@ def _extract_filler_timeline(words: list, filler_dict: dict) -> list[dict]:
                 "word": cleaned,
                 "timestamp_sec": round(sec, 2),
                 "timestamp_label": f"{mins:02d}:{secs:02d}",
-                "level": "error" if cleaned in ["basically", "like"] else "secondary",
+                "level": "error" if cleaned in hesitation_set else "secondary",
             })
-    return timeline[:12]
+    return timeline[:15]
+
 
 
 

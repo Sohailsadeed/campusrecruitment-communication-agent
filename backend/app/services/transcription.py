@@ -109,12 +109,19 @@ def transcribe_audio(
                 segments, info = model.transcribe(
                     str(audio_path),
                     language="en",
-                    suppress_tokens=[],               # Preserves um, uh, uhh, hmm
+                    suppress_tokens=[],               # Preserves um, uh, uhh, hmm verbatim
                     condition_on_previous_text=False, # No clean-up between sentences
-                    vad_filter=False,                 # Do not trim short hesitation sounds
+                    vad_filter=True,                  # Native Silero VAD enabled
+                    vad_parameters=dict(
+                        threshold=0.35,              # Sensitive threshold: captures soft 'um' and 'uh'
+                        min_speech_duration_ms=100,  # Retains short micro-hesitations down to 100ms
+                        min_silence_duration_ms=500, # 0.5s pause boundary between utterances
+                        speech_pad_ms=250,           # 250ms padding so word starts/ends aren't clipped
+                    ),
                     beam_size=5,
                     word_timestamps=True,             # Word-level timing
                 )
+
 
                 transcript_parts: List[str] = []
                 extracted_words: List[Dict[str, Any]] = []

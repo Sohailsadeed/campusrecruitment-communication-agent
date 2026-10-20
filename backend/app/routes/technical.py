@@ -86,6 +86,42 @@ async def upload_resume(
     }
 
 
+@router.get("/resume/status")
+def get_resume_status(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Check if current user already has an active indexed resume from prior sessions."""
+    has_resume = bool(
+        current_user.resume_path
+        and Path(current_user.resume_path).exists()
+    )
+    active_name = current_user.resume_name
+    if has_resume and not active_name and current_user.resume_path:
+        raw_name = Path(current_user.resume_path).name
+        prefix = f"user_{current_user.id}_"
+        active_name = raw_name[len(prefix):] if raw_name.startswith(prefix) else raw_name
+
+    return {
+        "has_resume": has_resume,
+        "resume_name": active_name if has_resume else None,
+    }
+
+
+@router.delete("/resume")
+def clear_resume(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Detach active resume from user profile so interview runs without resume grounding."""
+    current_user.resume_path = None
+    current_user.resume_name = None
+    db.commit()
+    return {
+        "status": "success",
+        "message": "Resume detached. Interview will run with general role questions.",
+    }
+
+
 @router.post("/start")
 async def start_technical_interview(
     req: StartInterviewRequest,

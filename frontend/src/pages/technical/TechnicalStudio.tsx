@@ -4,6 +4,8 @@ import {
   startTechnicalInterview,
   submitTechnicalAnswer,
   uploadResume,
+  getResumeStatus,
+  clearResume,
   QuestionItem,
 } from "../../api/technical";
 
@@ -26,6 +28,30 @@ export default function TechnicalStudio() {
   const [resumeUploadedName, setResumeUploadedName] = useState("");
   const [uploadingResume, setUploadingResume] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isCheckingResume, setIsCheckingResume] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check if candidate already has an indexed resume from a prior session
+  useEffect(() => {
+    let mounted = true;
+    getResumeStatus()
+      .then((status) => {
+        if (!mounted) return;
+        if (status.has_resume) {
+          setResumeUploadedName(status.resume_name || "Active Resume on File");
+          setUploadSuccess(true);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not check resume status:", err);
+      })
+      .finally(() => {
+        if (mounted) setIsCheckingResume(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Active Session State
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -120,6 +146,20 @@ export default function TechnicalStudio() {
       setErrorMsg(err?.response?.data?.detail || "Failed to upload and index resume in ChromaDB.");
     } finally {
       setUploadingResume(false);
+    }
+  };
+
+  const handleClearResume = async () => {
+    try {
+      await clearResume();
+      setResumeFile(null);
+      setResumeUploadedName("");
+      setUploadSuccess(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (err: any) {
+      setErrorMsg("Failed to detach resume.");
     }
   };
 
@@ -356,37 +396,95 @@ export default function TechnicalStudio() {
                 so the interviewer interrogates your actual past architectural choices.
               </p>
 
-              {/* Upload Dropzone */}
-              <label className="relative border-2 border-dashed border-outline-variant/40 hover:border-primary/60 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-surface-container/50 hover:bg-surface-container">
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleResumeUpload}
-                  className="hidden"
-                  disabled={uploadingResume}
-                />
-                <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
-                  <span className="material-symbols-outlined text-[24px]">
-                    {uploadingResume ? "sync" : "cloud_upload"}
-                  </span>
-                </div>
-                <span className="text-xs font-semibold text-on-surface mb-0.5">
-                  {uploadingResume
-                    ? "Chunking and vector-indexing..."
-                    : resumeUploadedName
-                    ? `Indexed: ${resumeUploadedName}`
-                    : "Click to upload engineering resume (PDF)"}
-                </span>
-                <span className="text-[10px] text-outline">
-                  {uploadSuccess ? "Embedded with all-MiniLM-L6-v2 in ChromaDB" : "Supports standard 1-2 page PDFs"}
-                </span>
-              </label>
+              {/* Hidden file input controlled by ref */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                onChange={handleResumeUpload}
+                className="hidden"
+                disabled={uploadingResume}
+              />
 
-              {uploadSuccess && (
-                <div className="p-3 rounded-lg bg-tertiary-container/20 border border-tertiary/30 text-tertiary text-xs flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[16px]">verified</span>
-                  <span>Resume parsed & embedded into vector collection!</span>
+              {/* Ingestion & Status Box */}
+              {isCheckingResume ? (
+                <div className="p-6 rounded-xl bg-surface-container/40 border border-outline-variant/30 flex items-center justify-center gap-3 text-outline text-xs">
+                  <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                  <span>Checking active resume grounding...</span>
                 </div>
+              ) : uploadingResume ? (
+                <div className="p-6 rounded-xl bg-surface-container/60 border border-primary/40 flex flex-col items-center justify-center text-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center animate-spin">
+                    <span className="material-symbols-outlined text-[20px]">sync</span>
+                  </div>
+                  <span className="text-xs font-semibold text-on-surface">Chunking & Vector Indexing...</span>
+                  <span className="text-[11px] text-outline">Generating embeddings with all-MiniLM-L6-v2</span>
+                </div>
+              ) : resumeUploadedName ? (
+                /* Active Indexed Resume Card */
+                <div className="p-4 rounded-xl bg-surface-container border border-primary/40 flex flex-col gap-3 shadow-md relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl pointer-events-none" />
+
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/30 text-primary flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-[22px]">picture_as_pdf</span>
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-on-surface truncate max-w-[200px]" title={resumeUploadedName}>
+                            {resumeUploadedName}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-secondary flex items-center gap-1 font-medium mt-0.5">
+                          <span className="material-symbols-outlined text-[14px]">verified</span>
+                          Active in ChromaDB
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="font-label-caps text-[9px] px-2 py-0.5 rounded-full bg-primary-container text-on-primary-container font-bold tracking-wider flex-shrink-0">
+                      GROUNDED
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                    This active resume from your profile will be used to generate personalized architectural scenarios.
+                  </p>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/30">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 py-1.5 px-3 rounded-lg bg-surface-container-high hover:bg-surface-container-highest border border-outline-variant/40 text-on-surface text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">file_upload</span>
+                      <span>Replace PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleClearResume}
+                      className="py-1.5 px-3 rounded-lg bg-error-container/20 hover:bg-error-container/30 border border-error/30 text-error text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      title="Detach resume so drill uses general questions"
+                    >
+                      <span className="material-symbols-outlined text-[15px]">delete_outline</span>
+                      <span>Detach</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Empty Upload Dropzone */
+                <label className="relative border-2 border-dashed border-outline-variant/40 hover:border-primary/60 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-surface-container/50 hover:bg-surface-container">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                    <span className="material-symbols-outlined text-[24px]">cloud_upload</span>
+                  </div>
+                  <span className="text-xs font-semibold text-on-surface mb-0.5">
+                    Click to upload engineering resume (PDF)
+                  </span>
+                  <span className="text-[10px] text-outline">
+                    Supports standard PDF resumes (parsed into ChromaDB vector store)
+                  </span>
+                </label>
               )}
             </div>
 
@@ -396,6 +494,18 @@ export default function TechnicalStudio() {
                 <span className="font-label-caps text-xs uppercase text-outline font-semibold">Ready to begin</span>
                 <span className="font-label-numeric-sm text-xs text-secondary font-bold">20-30 mins</span>
               </div>
+
+              {/* Grounding Status Preview */}
+              <div className="flex items-center justify-between text-xs py-2 px-3 rounded-lg bg-surface-container/60 border border-outline-variant/30">
+                <span className="text-outline text-[11px] font-label-caps uppercase">Grounding Mode:</span>
+                <span className={`font-semibold flex items-center gap-1.5 text-xs ${resumeUploadedName ? "text-tertiary" : "text-secondary"}`}>
+                  <span className="material-symbols-outlined text-[15px]">
+                    {resumeUploadedName ? "verified" : "auto_awesome"}
+                  </span>
+                  {resumeUploadedName ? "Resume-Grounded" : "General Role Scope"}
+                </span>
+              </div>
+
               <button
                 type="button"
                 onClick={handleStartInterview}
@@ -445,7 +555,13 @@ export default function TechnicalStudio() {
         </div>
 
         {/* Stepper & Timer */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          {resumeUploadedName && (
+            <div className="hidden sm:flex items-center gap-1 font-label-numeric-sm text-[11px] text-tertiary px-2.5 py-1 rounded-lg bg-tertiary-container/20 border border-tertiary/30">
+              <span className="material-symbols-outlined text-[14px]">verified</span>
+              <span>Grounded</span>
+            </div>
+          )}
           <div className="flex items-center gap-2 font-label-numeric-sm text-xs text-on-surface bg-surface-container px-3 py-1.5 rounded-lg border border-outline-variant/20">
             <span className="material-symbols-outlined text-[16px] text-tertiary">schedule</span>
             <span>{formatTimer(elapsedSeconds)}</span>

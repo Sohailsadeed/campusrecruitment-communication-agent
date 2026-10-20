@@ -7,20 +7,25 @@ import DashboardPage from "./pages/DashboardPage";
 import SettingsPage from "./pages/SettingsPage";
 import TechnicalStudio from "./pages/technical/TechnicalStudio";
 import TechnicalReport from "./pages/technical/TechnicalReport";
+import { AuthProvider } from "./context/AuthContext";
+import AuthModal from "./components/Auth/AuthModal";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/record" element={<RecordingPage />} />
-        <Route path="/technical" element={<TechnicalStudio />} />
-        <Route path="/technical/report/:sessionId" element={<TechnicalReport />} />
-        <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <AuthProvider>
+      <AuthModal />
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/record" element={<RecordingPage />} />
+          <Route path="/technical" element={<TechnicalStudio />} />
+          <Route path="/technical/report/:sessionId" element={<TechnicalReport />} />
+          <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </AuthProvider>
   );
 }

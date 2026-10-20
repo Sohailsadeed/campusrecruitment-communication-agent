@@ -59,30 +59,43 @@ VerbalIQ implements a state-of-the-art **two-stage "extract cues → LLM fuses" 
 ## ⚡ Key Capabilities
 
 ### 1. Audio & Speech Analytics
-- **Faster-Whisper with Word Timestamps**: Captures exact word-level timings and disfluency bounds.
+- **Faster-Whisper with Technical Lexicon Normalizer**: Employs an engineering domain initial prompt and an automated compounding normalizer to ensure technical terms (e.g. `"backend development"`, `"frontend"`, `"microservices"`, `"Kubernetes"`) transcribe accurately without phonetic splitting (e.g. avoiding `"back and development"`).
 - **Tuned Silero VAD**: Uses a calibrated threshold (`0.35`) and `250ms` speech padding to guarantee that soft vocal hesitations (`"uh"`, `"um"`, `"hmm"`) are preserved verbatim rather than clipped.
 - **Acoustic Pause Detection**: Calculates micro-hesitations and frozen pauses ($\ge 0.5\text{s}$) across speaking turns.
 - **Dynamic Cadence Sparkline**: Real-time interval WPM calculations across the session.
 
-### 2. Utterance-Aligned Computer Vision (MediaPipe)
+### 2. Acoustic Prosody DSP Engine & Dual-Factor Confidence Index
+- **Pure Physical Soundwave Analysis**: Uses PyAV and SciPy/NumPy autocorrelation to extract vocal energy (RMS dB) and fundamental pitch frequency ($F_0$ in Hz) directly from raw audio streams with zero GPU overhead (~30ms CPU execution).
+- **Decoupled from Camera Gaze**: Eliminates webcam parallax distortion and eye contact noise from confidence scoring, basing poise strictly on vocal acoustic reality.
+- **Dual-Factor Confidence Index**:
+  $$\text{Confidence Score} = 0.50 \times \text{Acoustic Subscore} + 0.50 \times \text{Fluency \& Pause Subscore}$$
+  - **50% Soundwave Pitch & Vocal Energy**:
+    - **Vocal Projection**: Average RMS soundwave power in dB.
+    - **Pitch Modulation**: Optimal $F_0$ dynamic range (18–42 Hz std) rewarding executive vocal melody over monotone delivery.
+    - **Terminal Intonation**: Decisive downward drops ($F_0 \downarrow$) earn authority bonuses, while hesitant "uptalk" question inflections ($F_0 \uparrow$) incur penalties.
+  - **50% Behavioral Fluency & Pause Control**:
+    - Silence freeze penalties for dead pauses $\ge 2.0\text{s}$ and cumulative pause budgets $> 4.0\text{s}$.
+    - Continuity pacing between arguments.
+
+### 3. Utterance-Aligned Computer Vision (MediaPipe)
 - **Windowed Frame Extraction**: Processes video frames *only* when the candidate is speaking, cutting CV load by 70% and tying physical gestures directly to spoken clauses.
 - **Webcam Parallax Compensation**: Implements an elliptical screen-offset tolerance cone ($\pm 15^\circ$ buffer) so candidates aren't penalized for looking at the screen.
 - **Affective & Posture Telemetry**: Tracks eyebrow raise/furrow, head stability, torso lean via face magnification proxy, and hand-to-face touching (nervous fidget indicator) vs open-palm emphasis gestures.
 
-### 3. Local LLM Fusion (Ollama with Native JSON Schema)
+### 4. Local LLM Fusion (Ollama with Native JSON Schema)
 - Powered by `qwen3.5:4b` running locally on Ollama.
 - Uses **Ollama's native JSON Schema mode** (`format: <schema>`) for token-level grammar logit masking, completely eliminating missing keys or conversational preamble.
 - Evaluates:
-  - **Verbal-Nonverbal Congruence**: Identifies instances where posture or averted gaze contradicted spoken technical claims.
-  - **6 Core Competencies**: Articulation, Structure (STAR flow), Technical Depth, Pacing, Confidence, and Conciseness.
-  - **Critical Moment Rewrites**: Side-by-side original sentence vs executive-level polished rewrite with letter grades and improvement tips.
+  - **Verbal-Nonverbal Congruence**: Identifies instances where posture or gestures contradicted spoken technical claims.
+  - **6 Core Competencies**: Articulation & Clarity, Structure & STAR Logic, Technical Depth & Precision, Pacing & Strategic Pauses, Confidence & Assertive Tone, and Conciseness (Low Fluff).
+  - **Critical Moment Rewrites**: Side-by-side original sentence vs executive-level polished rewrite with letter grades (`C-` to `A+`) and actionable coaching tips.
 
-### 4. Auditory Coach Avatar Voice (Text-to-Speech)
+### 5. Auditory Coach Avatar Voice (Text-to-Speech)
 - **Primary Voice**: Microsoft Edge Neural TTS (`en-US-ChristopherNeural`) producing an authoritative executive coach voice.
 - **Instant Fallback**: Browser-native Web Speech API if offline.
 - **Avatar Gesture Synchronization**: Schedules nonverbal reactions (`empathic_nod`, `attentive_tilt`, `open_palm_welcome`) aligned with spoken feedback.
 
-### 5. VerbalIQ Dark Cockpit UI
+### 6. VerbalIQ Dark Cockpit UI
 - High-contrast cockpit theme built on `#10131a` surface baseline with custom tokens (`Plus Jakarta Sans`, `JetBrains Mono`, `Inter`).
 - **4 Track Practice Arena**:
   - Track 01: Technical System Design
@@ -90,6 +103,7 @@ VerbalIQ implements a state-of-the-art **two-stage "extract cues → LLM fuses" 
   - Track 03: Guesstimates & Market Sizing
   - Track 04: JAM Blitz (Just A Minute)
 - Interactive SVG Radar chart, filler timeline with time chips, and utterance-aligned nonverbal telemetry cards.
+- **Acoustic Impression Card**: Live telemetry displaying vocal energy in dB RMS, decisive drop vs. uptalk counts, pitch modulation score, and the dual 50-50 subscores breakdown.
 
 ---
 

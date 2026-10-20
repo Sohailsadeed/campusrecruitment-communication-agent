@@ -1,0 +1,110 @@
+{
+  "Everyday Life": [
+    "Describe your ideal morning routine.",
+    "What is one habit that has improved your daily life?",
+    "Describe your favorite meal and why you enjoy it.",
+    "How do you usually spend your weekends?",
+    "What is something small that always makes your day better?",
+    "Describe your favorite place to relax.",
+    "How do you stay organized in your daily life?",
+    "Talk about a memorable conversation you had recently.",
+    "What is one thing you cannot live without in your daily routine?",
+    "Describe a typical day in your life."
+  ],
+  "Storytelling": [
+    "Tell a story about a time you got lost.",
+    "Describe a moment when you had to make a quick decision.",
+    "Talk about an unexpected act of kindness you experienced.",
+    "Share a funny misunderstanding you were involved in.",
+    "Describe your most memorable birthday.",
+    "Tell a story about overcoming a difficult challenge.",
+    "Talk about a time when things did not go as planned.",
+    "Describe a journey you will never forget.",
+    "Share a story about meeting someone interesting.",
+    "Talk about your proudest achievement and how it happened."
+  ],
+  "Opinion": [
+    "Should social media platforms be regulated more strictly?",
+    "Is remote work better than working from an office?",
+    "Should college education be free for everyone?",
+    "Do video games have more positive or negative effects on society?",
+    "Should governments invest more in space exploration?",
+    "Is artificial intelligence helping or harming humanity overall?",
+    "Should exams carry less weight in education?",
+    "Is it better to specialize in one skill or learn many?",
+    "Should people have a four-day workweek?",
+    "Can technology ever replace human creativity?"
+  ],
+  "Creativity": [
+    "If you could design a new city from scratch, what would it look like?",
+    "Invent a holiday that everyone would celebrate.",
+    "Describe a gadget that does not exist but should.",
+    "Imagine life if humans could fly naturally.",
+    "Create a new sport and explain its rules.",
+    "If animals could talk, which would be the most interesting to speak with?",
+    "Design your dream home with unlimited resources.",
+    "Imagine a world without the internet.",
+    "Create a superhero whose power solves everyday problems.",
+    "Describe what schools might look like 100 years from now."
+  ],
+  "Education": [
+    "What is the most important skill schools should teach but don't?",
+    "Should homework be mandatory?",
+    "What makes a great teacher?",
+    "How has technology changed the way people learn?",
+    "Should students be allowed to use AI tools for assignments?",
+    "What subject has been most useful in your life?",
+    "How can schools encourage creativity?",
+    "Is online learning as effective as classroom learning?",
+    "What advice would you give to someone starting college?",
+    "How should education adapt for future careers?"
+  ],
+  "Travel": [
+    "Describe a place you have visited that changed your perspective.",
+    "What is your dream travel destination and why?",
+    "Would you rather travel alone or with friends?",
+    "Describe your ideal vacation.",
+    "Talk about the best food you have tried while traveling.",
+    "What are the benefits of experiencing different cultures?",
+    "Describe a place in your country everyone should visit.",
+    "How does travel change a person's mindset?",
+    "If you could live in another country for a year, where would you choose?",
+    "What makes a trip truly memorable?"
+  ],
+  "Work": [
+    "What makes a leader truly effective in a modern workplace?",
+    "What qualities make a great teammate?",
+    "Should people follow their passion or choose a stable career?",
+    "How should companies handle employee burnout?",
+    "Describe your ideal work environment.",
+    "What is the biggest challenge young professionals face today?",
+    "How important is communication at work?",
+    "Should companies prioritize skills over degrees?",
+    "What motivates people to perform their best?",
+    "How do you handle constructive criticism?"
+  ],
+  "Entertainment": [
+    "Discuss a book or movie that had a significant impact on you.",
+    "Who is your favorite fictional character and why?",
+    "How has streaming changed entertainment?",
+    "Should movies always stay faithful to their books?",
+    "What kind of music best matches your personality?",
+    "Describe a concert, show, or event you would love to attend.",
+    "What makes a story unforgettable?",
+    "How do games compare to movies as a storytelling medium?",
+    "What is your favorite way to relax after a busy day?",
+    "Should entertainment always have a deeper message?"
+  ],
+  "Personal Growth": [
+    "What does success mean to you at this stage of your life?",
+    "Describe a mistake that taught you an important lesson.",
+    "What habit would you like to develop next?",
+    "How do you deal with failure?",
+    "What motivates you to keep improving?",
+    "Describe a goal you are currently working toward.",
+    "How has your definition of happiness changed over time?",
+    "What personal quality are you most proud of?",
+    "How do you stay motivated during difficult times?",
+    "If you could give your younger self one piece of advice, what would it be?"
+  ]
+}

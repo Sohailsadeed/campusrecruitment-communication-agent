@@ -9,12 +9,38 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+TECH_CORRECTIONS: List[Tuple[re.Pattern, str]] = [
+    (re.compile(r"\bback\s+and\s+development\b", re.IGNORECASE), "backend development"),
+    (re.compile(r"\bback\s+end\b", re.IGNORECASE), "backend"),
+    (re.compile(r"\bfront\s+and\s+development\b", re.IGNORECASE), "frontend development"),
+    (re.compile(r"\bfront\s+end\b", re.IGNORECASE), "frontend"),
+    (re.compile(r"\bfull\s+stack\b", re.IGNORECASE), "fullstack"),
+    (re.compile(r"\bjava\s+script\b", re.IGNORECASE), "JavaScript"),
+    (re.compile(r"\bdata\s+base\b", re.IGNORECASE), "database"),
+    (re.compile(r"\bdata\s+bases\b", re.IGNORECASE), "databases"),
+    (re.compile(r"\bmicro\s+services\b", re.IGNORECASE), "microservices"),
+    (re.compile(r"\brest\s+apis?\b", re.IGNORECASE), "REST API"),
+    (re.compile(r"\bpost\s+gress?\b", re.IGNORECASE), "PostgreSQL"),
+    (re.compile(r"\bdev\s+ops\b", re.IGNORECASE), "DevOps"),
+]
+
+
+def _normalize_tech_terms(text: str) -> str:
+    """Normalize common acoustic splits for software engineering terms."""
+    res = text
+    for pattern, replacement in TECH_CORRECTIONS:
+        res = pattern.sub(replacement, res)
+    return res
+
+
 _FASTER_WHISPER_AVAILABLE = False
+
 try:
     from faster_whisper import WhisperModel
     _FASTER_WHISPER_AVAILABLE = True
@@ -111,7 +137,11 @@ def transcribe_audio(
                     language="en",
                     suppress_tokens=[],               # Preserves um, uh, uhh, hmm verbatim
                     condition_on_previous_text=False, # No clean-up between sentences
-                    initial_prompt="A professional candidate speaking in an English workplace interview about communication skills, software engineering, teamwork, and leadership.",
+                    initial_prompt=(
+                        "A technical software engineering interview: backend development, frontend development, "
+                        "fullstack, Java, Python, REST APIs, databases, microservices, system architecture, "
+                        "DevOps, cloud infrastructure, latency, and algorithms."
+                    ),
                     vad_filter=True,                  # Native Silero VAD enabled
                     vad_parameters=dict(
                         threshold=0.35,              # Sensitive threshold: captures soft 'um' and 'uh'
@@ -123,19 +153,18 @@ def transcribe_audio(
                     word_timestamps=True,             # Word-level timing
                 )
 
-
-
                 transcript_parts: List[str] = []
                 extracted_words: List[Dict[str, Any]] = []
                 extracted_segments: List[Dict[str, Any]] = []
 
                 for idx, seg in enumerate(segments):
-                    transcript_parts.append(seg.text)
+                    cleaned_seg_text = _normalize_tech_terms(seg.text.strip())
+                    transcript_parts.append(cleaned_seg_text)
                     seg_words: List[Dict[str, Any]] = []
                     if hasattr(seg, "words") and seg.words:
                         for w in seg.words:
                             w_dict = {
-                                "word": w.word.strip(),
+                                "word": _normalize_tech_terms(w.word.strip()),
                                 "start": round(w.start, 2),
                                 "end": round(w.end, 2),
                                 "probability": round(w.probability, 2),
@@ -147,12 +176,12 @@ def transcribe_audio(
                             "id": idx + 1,
                             "start": round(seg.start, 2),
                             "end": round(seg.end, 2),
-                            "text": seg.text.strip(),
+                            "text": cleaned_seg_text,
                             "words": seg_words,
                         }
                     )
 
-                full_text = " ".join(transcript_parts).strip()
+                full_text = _normalize_tech_terms(" ".join(transcript_parts).strip())
                 pause_info = _calculate_pauses(extracted_words)
 
                 return {
@@ -163,6 +192,7 @@ def transcribe_audio(
                     "segments": extracted_segments,
                     **pause_info,
                 }
+
             except Exception as exc:
                 logger.warning("Faster-Whisper transcription failed, trying fallback: %s", exc)
 

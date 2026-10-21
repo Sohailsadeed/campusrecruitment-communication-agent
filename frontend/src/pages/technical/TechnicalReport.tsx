@@ -40,6 +40,21 @@ export default function TechnicalReport() {
     };
   }, [sessionId]);
 
+  const handleExportPDF = () => {
+    // 1. Ensure all question accordions are expanded for the print export
+    if (reportData?.questions) {
+      const openMap: Record<number, boolean> = {};
+      reportData.questions.forEach((_, idx) => {
+        openMap[idx] = true;
+      });
+      setExpandedQuestions(openMap);
+    }
+    // 2. Trigger browser print dialog after state applies
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
   const toggleTTS = (textToSpeak: string) => {
     if (isPlayingTTS) {
       window.speechSynthesis.cancel();
@@ -104,37 +119,88 @@ export default function TechnicalReport() {
   }
 
   return (
-    <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-7xl mx-auto flex flex-col gap-8">
+    <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-7xl mx-auto flex flex-col gap-8 print:p-0 print:max-w-none print:text-black">
+      {/* Print Document Stylesheet */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: #111 !important;
+          }
+          nav, aside, header, .no-print, audio, button {
+            display: none !important;
+          }
+          .print\\:break-inside-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
+        }
+      `}</style>
+
       {/* Ambient Backdrop Aura */}
-      <div className="pointer-events-none absolute -top-40 right-1/4 w-[700px] h-[400px] bg-primary/10 rounded-full blur-[140px]" />
-      <div className="pointer-events-none absolute top-1/2 -left-20 w-[500px] h-[350px] bg-secondary-container/10 rounded-full blur-[120px]" />
+      <div className="pointer-events-none absolute -top-40 right-1/4 w-[700px] h-[400px] bg-primary/10 rounded-full blur-[140px] print:hidden" />
+      <div className="pointer-events-none absolute top-1/2 -left-20 w-[500px] h-[350px] bg-secondary-container/10 rounded-full blur-[120px] print:hidden" />
 
       {/* Top Editorial Breadcrumbs & Header */}
-      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/30">
+      <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-outline-variant/30 print:border-b-2 print:border-black/20">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 text-xs text-outline font-label-caps">
+          <div className="flex items-center gap-2 text-xs text-outline font-label-caps print:hidden">
             <Link to="/" className="hover:text-on-surface transition-colors">Practice Arena</Link>
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <Link to="/technical" className="hover:text-on-surface transition-colors">Technical Studio</Link>
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <span className="text-secondary font-semibold">Evaluation Dossier</span>
           </div>
-          <h1 className="font-display-hero text-2xl sm:text-4xl font-extrabold text-on-surface tracking-tight">
+          <h1 className="font-display-hero text-2xl sm:text-4xl font-extrabold text-on-surface tracking-tight print:text-black">
             Technical Assessment Report
           </h1>
-          <p className="text-sm text-on-surface-variant flex items-center gap-2">
-            <span>Role: <strong className="text-on-surface font-semibold">{reportData.role}</strong></span>
+          <p className="text-sm text-on-surface-variant flex items-center gap-2 print:text-gray-700">
+            <span>Role: <strong className="text-on-surface font-semibold print:text-black">{reportData.role}</strong></span>
             {reportData.target_company && (
               <>
-                <span className="text-outline">•</span>
-                <span>Target: <strong className="text-secondary font-semibold">{reportData.target_company}</strong></span>
+                <span className="text-outline print:text-gray-400">•</span>
+                <span>Target: <strong className="text-secondary font-semibold print:text-black">{reportData.target_company}</strong></span>
+              </>
+            )}
+            {reportData.company_tier && (
+              <>
+                <span className="text-outline print:text-gray-400">•</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container/20 border border-secondary/30 text-secondary text-[11px] font-semibold print:text-black print:border-black/30">
+                  <span className="material-symbols-outlined text-[13px] print:hidden">tune</span>
+                  {reportData.company_tier === "tier1_product"
+                    ? "FAANG / Tier-1 Scale Bar"
+                    : reportData.company_tier === "growth_startup"
+                    ? "High-Growth Startup Velocity Bar"
+                    : reportData.company_tier === "enterprise_service"
+                    ? "Enterprise & Service SDLC Bar"
+                    : "Early-Stage Seed 0-to-1 Bar"}
+                </span>
+              </>
+            )}
+            {reportData.created_at && (
+              <>
+                <span className="text-outline print:text-gray-400">•</span>
+                <span>Date: <strong className="font-medium">{new Date(reportData.created_at).toLocaleDateString()}</strong></span>
               </>
             )}
           </p>
         </div>
 
         {/* Action CTAs */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 print:hidden">
+          {/* Export PDF Button */}
+          <button
+            type="button"
+            onClick={handleExportPDF}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-headline-sm text-xs font-semibold transition-colors border border-outline-variant/30"
+            title="Download or Print PDF Dossier"
+          >
+            <span className="material-symbols-outlined text-[18px] text-primary">
+              picture_as_pdf
+            </span>
+            <span>Export PDF</span>
+          </button>
+
           <button
             type="button"
             onClick={() => toggleTTS(summary)}
@@ -398,13 +464,36 @@ export default function TechnicalReport() {
                       </p>
                     </div>
 
-                    {/* Student Verbal Articulation */}
+                    {/* Student Verbal Articulation & Audio Playback */}
                     {q.answer ? (
-                      <div>
-                        <span className="font-label-caps text-[10px] uppercase text-outline font-semibold flex items-center gap-1 mb-1">
-                          <span className="material-symbols-outlined text-[14px]">record_voice_over</span>
-                          Student Spoken Articulation
-                        </span>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-label-caps text-[10px] uppercase text-outline font-semibold flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">record_voice_over</span>
+                            Student Spoken Articulation
+                          </span>
+                          {q.audio_url && (
+                            <span className="font-label-caps text-[10px] uppercase text-secondary font-bold flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[14px]">headphones</span>
+                              Original Spoken Audio Available
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Inline Audio Player */}
+                        {q.audio_url && (
+                          <div className="p-2.5 rounded-lg bg-surface-container border border-secondary/20 flex items-center gap-3">
+                            <audio
+                              controls
+                              src={q.audio_url}
+                              className="w-full h-8 max-w-md accent-secondary"
+                            />
+                            <span className="text-[11px] text-on-surface-variant font-medium hidden sm:inline">
+                              Playback candidate voice
+                            </span>
+                          </div>
+                        )}
+
                         <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20 whitespace-pre-line">
                           {q.answer}
                         </p>

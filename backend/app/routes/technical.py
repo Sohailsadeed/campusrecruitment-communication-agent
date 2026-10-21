@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,10 @@ router = APIRouter(prefix="/api/technical", tags=["Technical Round"])
 class StartInterviewRequest(BaseModel):
     role: str = Field(default="Full Stack Engineer", description="Target engineering role")
     target_company: Optional[str] = Field(default=None, description="Optional target company")
+    company_tier: Optional[str] = Field(
+        default="tier1_product",
+        description="Company calibration tier (tier1_product, growth_startup, enterprise_service, early_seed)",
+    )
     max_questions: int = Field(default=5, ge=1, le=10, description="Total questions for the round")
 
 
@@ -146,6 +150,7 @@ async def start_technical_interview(
         resume_ctx += f"\n\nCandidate Historical Weak Areas:\n{str(history[:2])}"
 
     # 3. Create universal Session record
+    company_tier = req.company_tier or "tier1_product"
     session = SessionModel(
         user_id=current_user.id,
         title=f"Technical Interview: {req.role}",
@@ -153,7 +158,11 @@ async def start_technical_interview(
         status="in_progress",
         round_type="technical",
         duration_seconds=0.0,
-        round_metadata={"role": req.role, "target_company": req.target_company},
+        round_metadata={
+            "role": req.role,
+            "target_company": req.target_company,
+            "company_tier": company_tier,
+        },
     )
     db.add(session)
     db.flush()
@@ -164,6 +173,7 @@ async def start_technical_interview(
         "user_id": current_user.id,
         "role": req.role,
         "target_company": req.target_company,
+        "company_tier": company_tier,
         "resume_context": resume_ctx,
         "questions": [],
         "current_question": None,
@@ -204,6 +214,7 @@ async def start_technical_interview(
         "session_id": session.id,
         "role": req.role,
         "target_company": req.target_company,
+        "company_tier": company_tier,
         "current_question": q1,
         "question_count": 0,
         "max_questions": req.max_questions,
@@ -213,12 +224,14 @@ async def start_technical_interview(
 
 @router.post("/answer")
 async def submit_technical_answer(
-    req: SubmitAnswerRequest,
+    session_id: int = Form(...),
+    answer: str = Form(...),
+    audio_file: Optional[UploadFile] = File(default=None),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Submit candidate's answer to the active question, evaluate, and fetch next question or final report."""
-    session = db.get(SessionModel, req.session_id)
+    session = db.get(SessionModel, session_id)
     if not session or session.round_type != "technical":
         raise HTTPException(status_code=404, detail="Technical interview session not found.")
 
@@ -229,16 +242,36 @@ async def submit_technical_answer(
     if not tech.current_question:
         raise HTTPException(status_code=400, detail="Interview is already completed.")
 
+    # Save audio if uploaded
+    audio_url = None
+    if audio_file:
+        try:
+            audio_dir = settings.upload_dir / "technical_audio"
+            audio_dir.mkdir(parents=True, exist_ok=True)
+            q_num = (tech.question_count or 0) + 1
+            filename = f"session_{session.id}_q_{q_num}_{current_user.id}.webm"
+            dest = audio_dir / filename
+            content = await audio_file.read()
+            with open(dest, "wb") as f:
+                f.write(content)
+            audio_url = f"/api/technical/audio/{filename}"
+            logger.info("Saved technical spoken audio: %s", dest)
+        except Exception as exc:
+            logger.warning("Failed to save spoken audio: %s", exc)
+
     # Prepare LangGraph state
+    round_meta = session.round_metadata or {}
+    company_tier = round_meta.get("company_tier") or "tier1_product"
     state = {
         "session_id": session.id,
         "user_id": current_user.id,
         "role": tech.role,
         "target_company": tech.target_company,
+        "company_tier": company_tier,
         "resume_context": tech.resume_context or "",
         "questions": list(tech.questions or []),
         "current_question": tech.current_question,
-        "answer": req.answer,
+        "answer": answer,
         "evaluation": None,
         "question_count": tech.question_count,
         "max_questions": tech.max_questions,
@@ -254,8 +287,12 @@ async def submit_technical_answer(
     is_complete = bool(graph_res.get("is_complete"))
     report = graph_res.get("report")
 
-    # Update DB state
-    tech.questions = graph_res.get("questions", tech.questions)
+    # Update DB state and attach audio_url to the completed question
+    updated_questions = list(graph_res.get("questions", tech.questions) or [])
+    if updated_questions and audio_url:
+        updated_questions[-1]["audio_url"] = audio_url
+
+    tech.questions = updated_questions
     tech.question_count = graph_res.get("question_count", tech.question_count + 1)
     tech.current_question = next_q
 
@@ -285,6 +322,7 @@ async def submit_technical_answer(
         "report": report,
         "question_count": tech.question_count,
         "max_questions": tech.max_questions,
+        "audio_url": audio_url,
     }
 
 
@@ -300,10 +338,12 @@ def get_technical_session(
         raise HTTPException(status_code=404, detail="Technical interview not found.")
 
     tech = session.technical_detail
+    round_meta = session.round_metadata or {}
     return {
         "session_id": session.id,
         "role": tech.role if tech else "Technical Interview",
         "target_company": tech.target_company if tech else None,
+        "company_tier": round_meta.get("company_tier", "tier1_product"),
         "current_question": tech.current_question if tech else None,
         "question_count": tech.question_count if tech else 0,
         "max_questions": tech.max_questions if tech else 5,
@@ -329,12 +369,27 @@ def get_technical_report(
         raise HTTPException(status_code=400, detail="Report has not been generated for this session yet.")
 
     tech = session.technical_detail
+    round_meta = session.round_metadata or {}
     return {
         "session_id": session.id,
         "role": tech.role if tech else "Software Engineer",
         "target_company": tech.target_company if tech else None,
+        "company_tier": round_meta.get("company_tier", "tier1_product"),
         "overall_score": session.overall_score,
         "report": session.report,
         "questions": tech.questions if tech else [],
         "created_at": session.created_at.isoformat() if session.created_at else None,
     }
+
+
+@router.get("/audio/{filename}")
+def stream_technical_audio(filename: str):
+    """Safely stream recorded candidate audio file."""
+    from fastapi.responses import FileResponse
+    # Clean filename to avoid path traversal
+    safe_name = Path(filename).name
+    file_path = settings.upload_dir / "technical_audio" / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Audio recording not found.")
+    return FileResponse(file_path, media_type="audio/webm")
+

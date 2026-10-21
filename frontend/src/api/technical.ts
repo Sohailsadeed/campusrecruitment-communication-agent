@@ -24,11 +24,13 @@ export interface QuestionItem {
   jargon_critique?: string;
   star_breakdown?: StarBreakdown;
   ideal_concise_script?: string;
+  audio_url?: string;
 }
 
 export interface StartTechnicalRequest {
   role: string;
   target_company?: string;
+  company_tier?: string;
   max_questions?: number;
 }
 
@@ -36,6 +38,7 @@ export interface StartTechnicalResponse {
   session_id: number;
   role: string;
   target_company?: string;
+  company_tier?: string;
   current_question: QuestionItem;
   question_count: number;
   max_questions: number;
@@ -77,6 +80,7 @@ export interface TechnicalReportResponse {
   session_id: number;
   role: string;
   target_company?: string;
+  company_tier?: string;
   overall_score: number;
   report: TechnicalReportSummary;
   questions: QuestionItem[];
@@ -107,10 +111,20 @@ export async function startTechnicalInterview(data: StartTechnicalRequest): Prom
   return res.data;
 }
 
-export async function submitTechnicalAnswer(sessionId: number, answer: string): Promise<SubmitAnswerResponse> {
-  const res = await apiClient.post<SubmitAnswerResponse>("/api/technical/answer", {
-    session_id: sessionId,
-    answer,
+export async function submitTechnicalAnswer(
+  sessionId: number,
+  answer: string,
+  audioBlob?: Blob | null
+): Promise<SubmitAnswerResponse> {
+  const formData = new FormData();
+  formData.append("session_id", String(sessionId));
+  formData.append("answer", answer);
+  if (audioBlob) {
+    formData.append("audio_file", audioBlob, "articulation.webm");
+  }
+
+  const res = await apiClient.post<SubmitAnswerResponse>("/api/technical/answer", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
 }

@@ -19,6 +19,7 @@ class InterviewState(TypedDict):
     user_id: int | str
     role: str
     target_company: Optional[str]
+    company_tier: Optional[str]
     resume_context: str
     questions: List[Dict[str, Any]]
     current_question: Optional[Dict[str, Any]]
@@ -34,12 +35,19 @@ class InterviewState(TypedDict):
 # LangGraph Nodes
 # ---------------------------------------------------------------------------
 async def generate_first_question_node(state: InterviewState) -> Dict[str, Any]:
-    """Generate the initial question (Q1) grounded in target role and resume."""
-    logger.info("LangGraph Node: generate_first_question for session %s", state.get("session_id"))
+    """Generate the initial question (Q1) grounded in target role, company calibration, and resume."""
+    logger.info(
+        "LangGraph Node: generate_first_question for session %s (tier=%s, company=%s)",
+        state.get("session_id"),
+        state.get("company_tier"),
+        state.get("target_company"),
+    )
     question = await generate_question(
         role=state["role"],
         resume_context=state.get("resume_context", ""),
         questions_asked=[],
+        target_company=state.get("target_company"),
+        company_tier=state.get("company_tier", "tier1_product"),
     )
     question["id"] = "q1"
     return {
@@ -94,12 +102,18 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
 
 async def generate_next_question_node(state: InterviewState) -> Dict[str, Any]:
     """Generate subsequent conversational questions, preventing repetition."""
-    logger.info("LangGraph Node: generate_next_question for session %s", state.get("session_id"))
+    logger.info(
+        "LangGraph Node: generate_next_question for session %s (tier=%s)",
+        state.get("session_id"),
+        state.get("company_tier"),
+    )
     questions = state.get("questions", [])
     next_q = await generate_question(
         role=state["role"],
         resume_context=state.get("resume_context", ""),
         questions_asked=questions,
+        target_company=state.get("target_company"),
+        company_tier=state.get("company_tier", "tier1_product"),
     )
     next_q["id"] = f"q{len(questions) + 1}"
     return {

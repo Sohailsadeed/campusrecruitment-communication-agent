@@ -17,6 +17,41 @@ const ROLE_PRESETS = [
   { label: "DevOps & Cloud Architect", icon: "cloud", desc: "Kubernetes, CI/CD, incident mitigation, and reliability" },
 ];
 
+export const COMPANY_TIERS = [
+  {
+    id: "tier1_product",
+    name: "FAANG / Tier-1 Product",
+    bar: "Senior Scale & Systems Bar",
+    icon: "hub",
+    desc: "Millions of QPS, low latency, microservices resilience, CAP theorem, and deep fault tolerance.",
+    presets: ["Google", "Meta", "Amazon", "Uber"],
+  },
+  {
+    id: "growth_startup",
+    name: "High-Growth Startup",
+    bar: "Velocity & Practical Trade-offs",
+    icon: "bolt",
+    desc: "Rapid feature velocity vs tech debt, pragmatic API design, asynchronous workers, and traffic spikes.",
+    presets: ["Stripe", "Airbnb", "Razorpay", "Postman"],
+  },
+  {
+    id: "enterprise_service",
+    name: "Enterprise & Service Giants",
+    bar: "Core Fundamentals & SDLC",
+    icon: "corporate_fare",
+    desc: "SOLID OOP design, clean debugging, relational databases (ACID), and robust client contracts.",
+    presets: ["TCS", "Infosys", "Accenture", "Wipro"],
+  },
+  {
+    id: "early_seed",
+    name: "Early-Stage Seed / 0-to-1",
+    bar: "0-to-1 Builder & Ambiguity",
+    icon: "construction",
+    desc: "End-to-end fullstack ownership, building MVPs with speed, and navigating ambiguous requirements.",
+    presets: ["Seed Startup", "Stealth AI", "YC Batch"],
+  },
+];
+
 export default function TechnicalStudio() {
   const navigate = useNavigate();
   const { sessionId: paramSessionId } = useParams<{ sessionId?: string }>();
@@ -26,6 +61,7 @@ export default function TechnicalStudio() {
   const [role, setRole] = useState("Full Stack Engineer");
   const [customRole, setCustomRole] = useState("");
   const [targetCompany, setTargetCompany] = useState("");
+  const [companyTier, setCompanyTier] = useState("tier1_product");
   const [maxQuestions, setMaxQuestions] = useState(5);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeUploadedName, setResumeUploadedName] = useState("");
@@ -51,10 +87,13 @@ export default function TechnicalStudio() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Voice Mode (Speech Recognition & TTS)
+  // Voice Mode (Speech Recognition & MediaRecorder)
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   // Check if candidate already has an indexed resume from a prior session
   useEffect(() => {
@@ -95,6 +134,7 @@ export default function TechnicalStudio() {
             setQuestionCount(data.question_count || 0);
             if (data.role) setRole(data.role);
             if (data.target_company) setTargetCompany(data.target_company);
+            if (data.company_tier) setCompanyTier(data.company_tier);
             localStorage.setItem("speakflow_active_technical_session", String(sessionId));
           }
         })
@@ -145,17 +185,47 @@ export default function TechnicalStudio() {
     }
   }, []);
 
-  const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      alert("Voice input is not supported in this browser. Please use Google Chrome or Edge.");
-      return;
-    }
+  const toggleRecording = async () => {
     if (isRecording) {
-      recognitionRef.current.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
     } else {
-      recognitionRef.current.start();
-      setIsRecording(true);
+      setRecordedAudioBlob(null);
+      audioChunksRef.current = [];
+
+      // Start MediaRecorder to capture audio stream for playback in report
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+          recorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) {
+              audioChunksRef.current.push(e.data);
+            }
+          };
+          recorder.onstop = () => {
+            const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+            setRecordedAudioBlob(blob);
+            stream.getTracks().forEach((track) => track.stop());
+          };
+          recorder.start();
+          mediaRecorderRef.current = recorder;
+        } catch (err) {
+          console.warn("Could not start MediaRecorder for audio playback:", err);
+        }
+      }
+
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } else {
+        alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
+      }
     }
   };
 
@@ -220,6 +290,7 @@ export default function TechnicalStudio() {
       const res = await startTechnicalInterview({
         role: activeRole,
         target_company: targetCompany.trim() || undefined,
+        company_tier: companyTier,
         max_questions: maxQuestions,
       });
 
@@ -257,7 +328,7 @@ export default function TechnicalStudio() {
     setErrorMsg(null);
 
     try {
-      const res = await submitTechnicalAnswer(sessionId, answerText.trim());
+      const res = await submitTechnicalAnswer(sessionId, answerText.trim(), recordedAudioBlob);
 
       if (res.is_complete && res.report) {
         // Complete -> remove cached active session and go to report
@@ -267,6 +338,7 @@ export default function TechnicalStudio() {
         setCurrentQuestion(res.next_question);
         setQuestionCount(res.question_count);
         setAnswerText("");
+        setRecordedAudioBlob(null);
         if (res.next_question.text) {
           handleSpeakQuestion(res.next_question.text);
         }
@@ -391,20 +463,111 @@ export default function TechnicalStudio() {
               </div>
             </div>
 
-            {/* Target Company & Question Depth */}
-            <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-4 shadow-lg">
-              <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider">
-                Interview Environment & Depth
-              </span>
+            {/* Target Company Calibration & Environment */}
+            <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[18px]">tune</span>
+                  Target Company Calibration &amp; Tier
+                </span>
+                <span className="text-xs text-outline font-label-numeric-sm">Step 2 of 3</span>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed -mt-2">
+                Pre-calibrates the interviewer's technical bar, scenario complexity, and architectural expectations.
+              </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* 4 Interactive Calibration Tiers */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {COMPANY_TIERS.map((tier) => {
+                  const isSelected = companyTier === tier.id;
+                  return (
+                    <button
+                      key={tier.id}
+                      type="button"
+                      onClick={() => {
+                        setCompanyTier(tier.id);
+                        if (!targetCompany || COMPANY_TIERS.some((t) => t.presets.includes(targetCompany))) {
+                          setTargetCompany(tier.presets[0]);
+                        }
+                      }}
+                      className={`p-3.5 rounded-xl text-left border transition-all flex flex-col justify-between gap-2.5 ${
+                        isSelected
+                          ? "bg-secondary-container/20 border-secondary text-on-surface shadow-md shadow-secondary/10"
+                          : "bg-surface-container border-outline-variant/20 hover:border-outline-variant/60 text-on-surface-variant"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className={`material-symbols-outlined text-[20px] ${isSelected ? "text-secondary" : "text-outline"}`}>
+                            {tier.icon}
+                          </span>
+                          <span className="font-headline-sm text-xs font-bold text-on-surface">
+                            {tier.name}
+                          </span>
+                        </div>
+                        {isSelected && (
+                          <span className="material-symbols-outlined text-secondary text-[16px]">check_circle</span>
+                        )}
+                      </div>
+
+                      <span className="text-[11px] text-outline leading-snug">
+                        {tier.desc}
+                      </span>
+
+                      <div className="pt-1">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-label-numeric-sm font-semibold ${
+                          isSelected ? "bg-secondary text-on-secondary" : "bg-surface-container-high text-outline"
+                        }`}>
+                          {tier.bar}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Company Quick-Select Chips */}
+              <div className="flex flex-col gap-2 pt-1">
+                <span className="text-xs text-outline font-label-caps uppercase font-semibold">
+                  Quick-Fill Placement Presets ({COMPANY_TIERS.find((t) => t.id === companyTier)?.name})
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  {COMPANY_TIERS.find((t) => t.id === companyTier)?.presets.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setTargetCompany(preset)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
+                        targetCompany.toLowerCase() === preset.toLowerCase()
+                          ? "bg-secondary text-on-secondary border-secondary font-bold shadow-sm"
+                          : "bg-surface-container text-on-surface-variant border-outline-variant/30 hover:bg-surface-container-high"
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                  {targetCompany && (
+                    <button
+                      type="button"
+                      onClick={() => setTargetCompany("")}
+                      className="px-2 py-1 rounded-lg text-[11px] text-outline hover:text-error transition-colors"
+                      title="Clear custom company"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Company Name Input & Question Depth */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 border-t border-outline-variant/20">
                 <div>
                   <label className="text-xs text-outline font-label-caps uppercase block mb-1.5 font-semibold">
-                    Target Company (Optional)
+                    Target Company Name
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. Google, Stripe, Uber, Early-stage Seed"
+                    placeholder={`e.g. ${COMPANY_TIERS.find((t) => t.id === companyTier)?.presets.join(", ")}`}
                     value={targetCompany}
                     onChange={(e) => setTargetCompany(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-lg bg-surface-container border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-secondary transition-colors"
@@ -605,9 +768,13 @@ export default function TechnicalStudio() {
           </div>
           <div className="flex flex-col">
             <span className="font-headline-sm text-sm font-bold text-on-surface">{role}</span>
-            <span className="text-[11px] text-outline font-label-caps uppercase font-medium">
-              {targetCompany ? `Target: ${targetCompany}` : "Technical Evaluation Round"}
-            </span>
+            <div className="flex items-center gap-2 text-[11px] text-outline font-label-caps uppercase font-medium">
+              <span>{targetCompany ? `Target: ${targetCompany}` : "Technical Evaluation Round"}</span>
+              <span className="text-outline/40">•</span>
+              <span className="text-secondary font-semibold">
+                {COMPANY_TIERS.find((t) => t.id === companyTier)?.name || "FAANG Bar"}
+              </span>
+            </div>
           </div>
         </div>
 

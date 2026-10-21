@@ -148,6 +148,76 @@ class ReportSchema(BaseModel):
 
 
 # ---------------------------------------------------------
+# Company Calibration Tiers & Prompts
+# ---------------------------------------------------------
+COMPANY_TIER_PROFILES = {
+    "tier1_product": {
+        "title": "FAANG & Tier-1 Product (High Scale & Systems)",
+        "tone_prompt": (
+            "COMPANY CALIBRATION: FAANG & Tier-1 High-Scale Product (e.g. Google, Meta, Amazon, Uber, Netflix).\n"
+            "DIFFICULTY LEVEL: High / Senior Scale Architecture.\n"
+            "EMPHASIS: Drill down on extreme scale (millions of QPS), distributed systems, fault tolerance, "
+            "asynchronous event streaming, CAP theorem trade-offs, caching invalidation, and defending architectural robustness."
+        ),
+        "fallbacks": [
+            {"text": "When scaling a distributed backend to millions of concurrent requests, how would you design for fault tolerance and communicate your partition-tolerance trade-offs to the team?", "type": "conceptual"},
+            {"text": "Can you walk through how you would architect a low-latency caching and data invalidation layer across distributed microservices, explaining your consistency model?", "type": "situational"},
+            {"text": "Describe a scenario where a cascading failure or deadlock hit production at scale. How did you triage the root cause, communicate with incident responders, and lead the mitigation?", "type": "situational"},
+            {"text": "How do you evaluate and communicate the architectural trade-off between strict database ACID guarantees versus eventual consistency when designing high-throughput services?", "type": "conceptual"},
+            {"text": "Tell me about a time you had to defend a major architectural redesign or technical migration against pushback from senior peers. How did you articulate the long-term ROI?", "type": "behavioral"},
+        ],
+    },
+    "growth_startup": {
+        "title": "High-Growth Startup (Velocity & Practical Trade-offs)",
+        "tone_prompt": (
+            "COMPANY CALIBRATION: High-Growth Startup (e.g. Stripe, Airbnb, Razorpay, Zepto, Series B+).\n"
+            "DIFFICULTY LEVEL: Upper-Mid / Pragmatic Product Engineering.\n"
+            "EMPHASIS: Rapid feature velocity vs technical debt, practical API design, resilient asynchronous task queues, "
+            "handling sudden traffic spikes under lean team constraints, and articulating pragmatic trade-offs."
+        ),
+        "fallbacks": [
+            {"text": "In a fast-growing startup, how do you decide when to ship a scrappy MVP versus investing in a cleanly abstracted architecture, and how do you communicate that trade-off?", "type": "situational"},
+            {"text": "Can you explain how you would design an asynchronous task queue or webhook delivery system to ensure webhook payloads are delivered reliably without overwhelming the main API?", "type": "conceptual"},
+            {"text": "Tell me about a high-urgency bug or performance regression you diagnosed right before a major release. How did you balance fixing it quickly versus communicating risk to stakeholders?", "type": "behavioral"},
+            {"text": "How do you break down a monolithic component or legacy endpoint into a clean, reusable service while maintaining feature delivery velocity?", "type": "situational"},
+            {"text": "Walk me through how you prioritize technical debt against urgent feature requests when sprint planning with non-technical product managers.", "type": "behavioral"},
+        ],
+    },
+    "enterprise_service": {
+        "title": "Enterprise & Service-Based (Core Fundamentals & SDLC)",
+        "tone_prompt": (
+            "COMPANY CALIBRATION: Enterprise & Service Giants (e.g. TCS, Infosys, Wipro, Accenture, Cognizant).\n"
+            "DIFFICULTY LEVEL: Core Fundamentals & Engineering Discipline.\n"
+            "EMPHASIS: Solid software engineering fundamentals, SOLID OOP principles, relational database transactions (ACID), "
+            "API contract stability, systematic debugging, SDLC adherence, and structured stakeholder communication."
+        ),
+        "fallbacks": [
+            {"text": "Can you explain how you apply SOLID design principles or clean OOP patterns to make enterprise software modular, maintainable, and easy for other developers to extend?", "type": "conceptual"},
+            {"text": "How do you approach database schema normalization and transactional integrity (ACID) when designing a relational data model for an enterprise client?", "type": "conceptual"},
+            {"text": "Describe your step-by-step methodology when debugging a production defect reported by a client. How do you document your findings and communicate root-cause analysis?", "type": "situational"},
+            {"text": "Tell me about a time you had to adapt to client-mandated architectural guidelines or legacy frameworks. How did you ensure code quality while meeting their specifications?", "type": "behavioral"},
+            {"text": "How do you structure code reviews and unit test coverage across your team to prevent regressions before enterprise staging deployment?", "type": "behavioral"},
+        ],
+    },
+    "early_seed": {
+        "title": "Early-Stage Seed / 0-to-1 (Ownership & Ambiguity)",
+        "tone_prompt": (
+            "COMPANY CALIBRATION: Early-Stage Seed Startup (0-to-1 MVP Building).\n"
+            "DIFFICULTY LEVEL: Generalist Builder / High Autonomy.\n"
+            "EMPHASIS: End-to-end full-stack ownership, building with ambiguity, choosing simple tools to iterate fast, "
+            "taking initiative, and clear communication without corporate bureaucracy."
+        ),
+        "fallbacks": [
+            {"text": "When building an MVP from a blank slate with ambiguous user requirements, how do you architect the initial data model and choose your tech stack to maximize iteration speed?", "type": "situational"},
+            {"text": "Can you explain a time you took end-to-end ownership of an unproven feature from design to deployment, and how you communicated progress to founders?", "type": "behavioral"},
+            {"text": "How do you evaluate whether to build a custom solution in-house versus integrating an off-the-shelf third-party API when building with limited resources?", "type": "conceptual"},
+            {"text": "Tell me about a time you shipped something that failed in production or user testing. How quickly did you pivot, and what did you learn about agile iteration?", "type": "behavioral"},
+            {"text": "How do you communicate complex technical blockers directly to non-technical founders without getting lost in implementation minutiae?", "type": "behavioral"},
+        ],
+    },
+}
+
+# ---------------------------------------------------------
 # Prompts & LCEL Chains
 # ---------------------------------------------------------
 _question_parser = JsonOutputParser(pydantic_object=QuestionSchema)
@@ -162,18 +232,21 @@ _question_prompt = ChatPromptTemplate.from_messages(
             "- All questions must be conversational questions that test how effectively the candidate explains concepts, defends design choices, and navigates workplace scenarios.\n\n"
             "TARGET FOCUS FOR THIS ROUND:\n"
             "{target_focus}\n\n"
+            "COMPANY CALIBRATION PROFILE:\n"
+            "{company_calibration}\n\n"
             "CRITICAL ANTI-REPETITION RULES:\n"
             "1. You MUST NOT repeat, rephrase, or overlap with any previously asked question listed below.\n"
             "2. Explore an entirely different scenario, concept, or real-world challenge from the candidate's background/role.\n"
-            "3. Ask ONE clear, engaging, and thought-provoking question.\n\n"
+            "3. Ask ONE clear, engaging, and thought-provoking question calibrated for the selected company tier.\n\n"
             "{format_instructions}",
         ),
         (
             "user",
-            "Role: {role}\n\n"
+            "Role: {role}\n"
+            "Target Company: {target_company}\n\n"
             "Resume / Job Context:\n{resume_context}\n\n"
             "PREVIOUSLY ASKED QUESTIONS (DO NOT REPEAT):\n{asked_questions}\n\n"
-            "Generate Question #{question_num} matching the target communication focus.",
+            "Generate Question #{question_num} matching the target communication focus and company calibration tier.",
         ),
     ]
 )
@@ -248,9 +321,13 @@ _DEFAULT_FALLBACKS = [
 
 
 async def generate_question(
-    role: str, resume_context: str, questions_asked: list[dict]
+    role: str,
+    resume_context: str,
+    questions_asked: list[dict],
+    target_company: Optional[str] = None,
+    company_tier: Optional[str] = "tier1_product",
 ) -> dict:
-    """Generate a tailored interview question using LangChain LCEL."""
+    """Generate a tailored interview question using LangChain LCEL calibrated for company tier."""
     asked_questions = "\n".join(
         f"- {q.get('text', '')}" for q in questions_asked
     ) or "None yet (this is the first question)."
@@ -258,7 +335,13 @@ async def generate_question(
     q_index = len(questions_asked)
     next_id = f"q{q_index + 1}"
     focus = _STAGE_FOCUSES[q_index % len(_STAGE_FOCUSES)]
-    fallback_data = _DEFAULT_FALLBACKS[q_index % len(_DEFAULT_FALLBACKS)]
+
+    # Retrieve company tier calibration profile
+    tier_key = company_tier if company_tier in COMPANY_TIER_PROFILES else "tier1_product"
+    tier_profile = COMPANY_TIER_PROFILES[tier_key]
+    calibration_text = tier_profile["tone_prompt"]
+    tier_fallbacks = tier_profile.get("fallbacks", _DEFAULT_FALLBACKS)
+    fallback_data = tier_fallbacks[q_index % len(tier_fallbacks)]
 
     default_fallback = {
         "id": next_id,
@@ -271,6 +354,8 @@ async def generate_question(
         result = await chain.ainvoke(
             {
                 "role": role,
+                "target_company": target_company or "General Tech Company",
+                "company_calibration": calibration_text,
                 "target_focus": focus,
                 "question_num": q_index + 1,
                 "resume_context": resume_context or "No resume provided.",

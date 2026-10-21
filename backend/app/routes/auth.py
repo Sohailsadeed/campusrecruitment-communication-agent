@@ -95,6 +95,19 @@ def me(authorization: Optional[str] = Header(default=None), db: Session = Depend
     return UserOut.model_validate(user)
 
 
+def get_optional_current_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Extract authenticated user if JWT token is provided; otherwise return None (guest)."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        subject = decode_token(token)
+        if subject:
+            return db.scalar(select(User).where(User.email == subject))
+    return None
+
+
 def get_current_user(
     authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),

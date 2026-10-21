@@ -71,6 +71,14 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
         "answer": answer,
         "score": evaluation.get("score", 7),
         "feedback": evaluation.get("feedback", "Good response."),
+        "conciseness_score": evaluation.get("conciseness_score", 8),
+        "rambling_detected": evaluation.get("rambling_detected", False),
+        "rambling_critique": evaluation.get("rambling_critique", "Direct delivery."),
+        "jargon_vs_understanding": evaluation.get("jargon_vs_understanding", "applied_intuition"),
+        "applied_understanding_score": evaluation.get("applied_understanding_score", 8),
+        "jargon_critique": evaluation.get("jargon_critique", "Explained with applied intuition."),
+        "star_breakdown": evaluation.get("star_breakdown", {}),
+        "ideal_concise_script": evaluation.get("ideal_concise_script", ""),
     }
 
     questions = list(state.get("questions", []))

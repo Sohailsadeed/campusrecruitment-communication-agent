@@ -161,7 +161,7 @@ export default function TechnicalReport() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
         {/* Score Card */}
         <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
-          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Overall Technical Score</span>
+          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Overall Communication Score</span>
           <div className="flex items-baseline gap-2 my-2">
             <span className="font-display-hero text-4xl sm:text-5xl font-extrabold text-on-surface font-label-numeric">
               {Math.round(score)}
@@ -176,41 +176,58 @@ export default function TechnicalReport() {
           </div>
         </div>
 
-        {/* Evaluator Verdict */}
+        {/* Conciseness & Anti-Rambling Metric */}
         <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
-          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Engineering Verdict</span>
+          <div className="flex items-center justify-between">
+            <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Verbal Conciseness</span>
+            <span className="material-symbols-outlined text-secondary text-[20px]">timer</span>
+          </div>
+          <div className="flex items-baseline gap-2 my-2">
+            <span className="font-display-hero text-4xl sm:text-5xl font-extrabold text-on-surface font-label-numeric">
+              {reportData.report?.avg_conciseness_score ?? 80}
+            </span>
+            <span className="text-sm text-outline font-medium">/ 100</span>
+          </div>
+          <div className="text-xs text-on-surface-variant flex items-center gap-1.5">
+            {reportData.report?.rambling_rate_percent && reportData.report.rambling_rate_percent > 0 ? (
+              <span className="text-rose-400 font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">warning</span>
+                {reportData.report.rambling_rate_percent}% rambling detected
+              </span>
+            ) : (
+              <span className="text-tertiary font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Zero circular rambling flagged
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Applied Understanding vs Textbook Jargon */}
+        <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
+          <div className="flex items-center justify-between">
+            <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Applied Understanding</span>
+            <span className="material-symbols-outlined text-tertiary text-[20px]">psychology</span>
+          </div>
+          <div className="flex items-baseline gap-2 my-2">
+            <span className="font-display-hero text-4xl sm:text-5xl font-extrabold text-on-surface font-label-numeric">
+              {reportData.report?.avg_understanding_score ?? 82}
+            </span>
+            <span className="text-sm text-outline font-medium">/ 100</span>
+          </div>
+          <span className="text-xs text-outline font-body-md">Intuitive grasp vs rote memorization</span>
+        </div>
+
+        {/* Student Placement Verdict */}
+        <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
+          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Placement Readiness</span>
           <div className="my-2">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${verdict.color}`}>
               <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
               {verdict.text}
             </span>
           </div>
-          <span className="text-xs text-outline font-body-md">Calibrated against tier-1 engineering bar</span>
-        </div>
-
-        {/* Questions Completed */}
-        <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
-          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Questions Evaluated</span>
-          <div className="flex items-baseline gap-2 my-2">
-            <span className="font-display-hero text-4xl sm:text-5xl font-extrabold text-on-surface font-label-numeric">
-              {questions.length}
-            </span>
-            <span className="text-sm text-outline font-medium">stages</span>
-          </div>
-          <span className="text-xs text-outline font-body-md">Adaptive system design & architecture</span>
-        </div>
-
-        {/* AI Evaluator Engine */}
-        <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between shadow-xl">
-          <span className="font-label-caps text-[11px] uppercase text-outline font-semibold">Evaluation Engine</span>
-          <div className="my-2 flex items-center gap-2">
-            <span className="material-symbols-outlined text-secondary text-[24px]">neurology</span>
-            <span className="font-headline-sm text-sm font-bold text-on-surface">Nemotron 550B</span>
-          </div>
-          <span className="text-[11px] text-tertiary flex items-center gap-1 font-medium">
-            <span className="w-1.5 h-1.5 rounded-full bg-tertiary" />
-            RAG Semantic Context Grounded
-          </span>
+          <span className="text-xs text-outline font-body-md">Benchmarked for campus & student interviews</span>
         </div>
       </div>
 
@@ -219,9 +236,9 @@ export default function TechnicalReport() {
         <div className="flex items-center justify-between">
           <span className="font-label-caps text-xs uppercase text-secondary font-bold tracking-wider flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">summarize</span>
-            Evaluator Executive Synthesis
+            Communication &amp; Articulation Executive Synthesis
           </span>
-          <span className="text-xs text-outline font-label-numeric-sm">LangGraph Dynamic Report</span>
+          <span className="text-xs text-outline font-label-numeric-sm">LangGraph Dynamic Evaluation</span>
         </div>
         <p className="text-sm text-on-surface leading-relaxed font-body-md whitespace-pre-line">
           {summary}
@@ -234,7 +251,7 @@ export default function TechnicalReport() {
         <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col gap-4">
           <div className="flex items-center gap-2 text-tertiary font-headline-sm text-sm font-bold">
             <span className="material-symbols-outlined text-[20px]">check_circle</span>
-            <span>Demonstrated Strengths</span>
+            <span>Demonstrated Communication Strengths</span>
           </div>
           <ul className="flex flex-col gap-2.5">
             {strengths.length > 0 ? (
@@ -254,7 +271,7 @@ export default function TechnicalReport() {
         <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col gap-4">
           <div className="flex items-center gap-2 text-rose-400 font-headline-sm text-sm font-bold">
             <span className="material-symbols-outlined text-[20px]">troubleshoot</span>
-            <span>Architectural Gaps & Growth Areas</span>
+            <span>Articulation Gaps &amp; Rambling Flags</span>
           </div>
           <ul className="flex flex-col gap-2.5">
             {weaknesses.length > 0 ? (
@@ -276,7 +293,7 @@ export default function TechnicalReport() {
         <div className="flex items-center justify-between">
           <h2 className="font-headline-md text-lg sm:text-xl font-bold text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-secondary text-[22px]">list_alt</span>
-            <span>Question Breakdown & Telemetry</span>
+            <span>Question Breakdown &amp; Articulation Diagnostics</span>
           </h2>
           <div className="flex items-center gap-3">
             <button
@@ -304,6 +321,11 @@ export default function TechnicalReport() {
           {questions.map((q, idx) => {
             const isExpanded = !!expandedQuestions[idx];
             const qScore = q.score !== undefined ? q.score : 0;
+            const star = q.star_breakdown;
+            const isRambling = q.rambling_detected;
+            const conciseness = q.conciseness_score ?? 8;
+            const isTextbook = q.jargon_vs_understanding === "textbook_rote";
+
             return (
               <div
                 key={q.id || idx}
@@ -325,10 +347,28 @@ export default function TechnicalReport() {
                       {idx + 1}
                     </span>
                     <div className="flex flex-col min-w-0">
-                      <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">
-                        {q.type || "Challenge"}
-                      </span>
-                      <span className="font-headline-sm text-xs sm:text-sm text-on-surface font-semibold truncate">
+                      <div className="flex items-center gap-2">
+                        <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">
+                          {q.type || "Challenge"}
+                        </span>
+                        {isRambling ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">timer_off</span>
+                            Rambling Flagged
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-tertiary/10 text-tertiary border border-tertiary/20 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">check</span>
+                            Crisp Delivery
+                          </span>
+                        )}
+                        {isTextbook && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            Textbook Heavy
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-headline-sm text-xs sm:text-sm text-on-surface font-semibold truncate mt-0.5">
                         {q.text}
                       </span>
                     </div>
@@ -346,7 +386,8 @@ export default function TechnicalReport() {
 
                 {/* Accordion Body */}
                 {isExpanded && (
-                  <div className="px-5 pb-5 pt-2 border-t border-outline-variant/20 flex flex-col gap-4 bg-surface-container/30">
+                  <div className="px-5 pb-5 pt-3 border-t border-outline-variant/20 flex flex-col gap-4 bg-surface-container/30">
+                    {/* The Interview Question */}
                     <div>
                       <span className="font-label-caps text-[10px] uppercase text-secondary font-bold flex items-center gap-1 mb-1">
                         <span className="material-symbols-outlined text-[14px]">help_outline</span>
@@ -357,11 +398,12 @@ export default function TechnicalReport() {
                       </p>
                     </div>
 
+                    {/* Student Verbal Articulation */}
                     {q.answer ? (
                       <div>
                         <span className="font-label-caps text-[10px] uppercase text-outline font-semibold flex items-center gap-1 mb-1">
                           <span className="material-symbols-outlined text-[14px]">record_voice_over</span>
-                          Candidate Articulation
+                          Student Spoken Articulation
                         </span>
                         <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20 whitespace-pre-line">
                           {q.answer}
@@ -371,14 +413,92 @@ export default function TechnicalReport() {
                       <div className="text-xs text-outline italic">No spoken articulation recorded for this question.</div>
                     )}
 
+                    {/* Student Communication Diagnostic Triplets */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {/* 1. Conciseness & Anti-Rambling Box */}
+                      <div className="p-3.5 rounded-lg bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-label-caps text-[10px] uppercase font-bold text-secondary flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">timer</span>
+                            Conciseness ({conciseness}/10)
+                          </span>
+                          {isRambling ? (
+                            <span className="text-[10px] text-rose-400 font-bold">Rambled</span>
+                          ) : (
+                            <span className="text-[10px] text-tertiary font-bold">Direct</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          {q.rambling_critique || (isRambling ? "Answer repeated the same points circularly." : "Direct response with strong signal-to-noise ratio.")}
+                        </p>
+                      </div>
+
+                      {/* 2. Jargon vs Applied Understanding Box */}
+                      <div className="p-3.5 rounded-lg bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-label-caps text-[10px] uppercase font-bold text-tertiary flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">psychology</span>
+                            Applied Intuition
+                          </span>
+                          <span className="text-[10px] text-outline font-bold">
+                            {q.jargon_vs_understanding === "applied_intuition" ? "Applied" : q.jargon_vs_understanding === "textbook_rote" ? "Textbook" : "Balanced"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          {q.jargon_critique || "Demonstrated practical intuition rather than rote memorization."}
+                        </p>
+                      </div>
+
+                      {/* 3. STAR Structure Breakdown Box */}
+                      <div className="p-3.5 rounded-lg bg-surface-container-low border border-outline-variant/20 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-label-caps text-[10px] uppercase font-bold text-primary flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">view_timeline</span>
+                            STAR Structure
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] font-bold">
+                          <span className={`px-1.5 py-0.5 rounded border ${star?.situation ? "bg-tertiary/10 text-tertiary border-tertiary/20" : "bg-outline/10 text-outline border-outline/20"}`}>
+                            S {star?.situation ? "✓" : "✗"}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded border ${star?.task ? "bg-tertiary/10 text-tertiary border-tertiary/20" : "bg-outline/10 text-outline border-outline/20"}`}>
+                            T {star?.task ? "✓" : "✗"}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded border ${star?.action ? "bg-tertiary/10 text-tertiary border-tertiary/20" : "bg-outline/10 text-outline border-outline/20"}`}>
+                            A {star?.action ? "✓" : "✗"}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded border ${star?.result ? "bg-tertiary/10 text-tertiary border-tertiary/20" : "bg-outline/10 text-outline border-outline/20"}`}>
+                            R {star?.result ? "✓" : "✗"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          {star?.structure_feedback || "Clear narrative structure covering the main context and outcome."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* AI Feedback & Coaching */}
                     {q.feedback && (
                       <div>
-                        <span className="font-label-caps text-[10px] uppercase text-tertiary font-bold flex items-center gap-1 mb-1">
-                          <span className="material-symbols-outlined text-[14px]">psychology</span>
-                          Nemotron Architectural Critique &amp; Feedback
+                        <span className="font-label-caps text-[10px] uppercase text-secondary font-bold flex items-center gap-1 mb-1">
+                          <span className="material-symbols-outlined text-[14px]">lightbulb</span>
+                          Interviewer Feedback &amp; Critique
                         </span>
-                        <div className="text-xs sm:text-sm text-on-surface leading-relaxed font-body-md bg-tertiary-container/10 p-3.5 rounded-lg border border-tertiary/20 whitespace-pre-line">
+                        <div className="text-xs sm:text-sm text-on-surface leading-relaxed font-body-md bg-secondary-container/10 p-3.5 rounded-lg border border-secondary/20 whitespace-pre-line">
                           {q.feedback}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Ideal 45-Second Model Articulation Script */}
+                    {q.ideal_concise_script && (
+                      <div>
+                        <span className="font-label-caps text-[10px] uppercase text-tertiary font-bold flex items-center gap-1 mb-1">
+                          <span className="material-symbols-outlined text-[14px]">auto_fix_high</span>
+                          Model 45-Second Concise Script (How to Ace This)
+                        </span>
+                        <div className="text-xs sm:text-sm text-on-surface leading-relaxed font-body-md bg-tertiary-container/10 p-3.5 rounded-lg border border-tertiary/20 whitespace-pre-line italic">
+                          &ldquo;{q.ideal_concise_script}&rdquo;
                         </div>
                       </div>
                     )}

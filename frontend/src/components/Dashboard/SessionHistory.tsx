@@ -81,12 +81,21 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
               </div>
 
               <div className="flex items-center gap-2">
-                <Link
-                  to={s.round_type === "technical" ? `/technical/report/${s.id}` : `/analysis/${s.id}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high text-primary border border-primary/20 hover:bg-primary hover:text-on-primary font-medium text-xs transition-colors"
-                >
-                  View Report <ArrowUpRight className="w-3.5 h-3.5" />
-                </Link>
+                {s.status === "in_progress" && s.round_type === "technical" ? (
+                  <Link
+                    to={`/technical/${s.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-on-secondary font-bold text-xs hover:bg-secondary/90 transition-all shadow-sm"
+                  >
+                    Resume Drill <ArrowUpRight className="w-3.5 h-3.5" />
+                  </Link>
+                ) : (
+                  <Link
+                    to={s.round_type === "technical" ? `/technical/report/${s.id}` : `/analysis/${s.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high text-primary border border-primary/20 hover:bg-primary hover:text-on-primary font-medium text-xs transition-colors"
+                  >
+                    View Report <ArrowUpRight className="w-3.5 h-3.5" />
+                  </Link>
+                )}
                 <button
                   onClick={() => deleteMutation.mutate(s.id)}
                   className="w-8 h-8 flex items-center justify-center rounded-lg text-outline hover:text-error hover:bg-error-container/20 transition-colors"

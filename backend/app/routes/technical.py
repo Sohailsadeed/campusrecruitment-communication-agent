@@ -11,7 +11,7 @@ from app.database.engine import get_db
 from app.models.session import Session as SessionModel
 from app.models.technical import TechnicalInterview
 from app.models.user import User
-from app.routes.auth import get_current_user
+from app.routes.auth import get_current_user, get_optional_current_user
 from app.services.technical.interview_graph import interview_graph
 from app.services.technical.memory import get_user_history, store_performance
 from app.services.technical.rag import process_resume, retrieve_context
@@ -88,9 +88,15 @@ async def upload_resume(
 
 @router.get("/resume/status")
 def get_resume_status(
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ) -> dict:
-    """Check if current user already has an active indexed resume from prior sessions."""
+    """Check if current authenticated user has an active indexed resume. Guests return has_resume: False."""
+    if not current_user:
+        return {
+            "has_resume": False,
+            "resume_name": None,
+        }
+
     has_resume = bool(
         current_user.resume_path
         and Path(current_user.resume_path).exists()

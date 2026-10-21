@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   startTechnicalInterview,
   submitTechnicalAnswer,
   uploadResume,
   getResumeStatus,
   clearResume,
+  getTechnicalSession,
   QuestionItem,
 } from "../../api/technical";
 
@@ -18,6 +19,8 @@ const ROLE_PRESETS = [
 
 export default function TechnicalStudio() {
   const navigate = useNavigate();
+  const { sessionId: paramSessionId } = useParams<{ sessionId?: string }>();
+  const [searchParams] = useSearchParams();
 
   // Setup State
   const [role, setRole] = useState("Full Stack Engineer");
@@ -30,6 +33,28 @@ export default function TechnicalStudio() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isCheckingResume, setIsCheckingResume] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Active Session State
+  const [sessionId, setSessionId] = useState<number | null>(() => {
+    if (paramSessionId) return Number(paramSessionId);
+    const queryId = searchParams.get("session_id");
+    if (queryId) return Number(queryId);
+    const cached = localStorage.getItem("speakflow_active_technical_session");
+    return cached ? Number(cached) : null;
+  });
+  const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
+  const [questionCount, setQuestionCount] = useState(0);
+  const [answerText, setAnswerText] = useState("");
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Voice Mode (Speech Recognition & TTS)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   // Check if candidate already has an indexed resume from a prior session
   useEffect(() => {
@@ -53,20 +78,39 @@ export default function TechnicalStudio() {
     };
   }, []);
 
-  // Active Session State
-  const [sessionId, setSessionId] = useState<number | null>(null);
-  const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
-  const [questionCount, setQuestionCount] = useState(0);
-  const [answerText, setAnswerText] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Voice Mode (Speech Recognition & TTS)
-  const [isRecording, setIsRecording] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const recognitionRef = useRef<any>(null);
+  // Restore ongoing active session if navigating back from dashboard/progress
+  useEffect(() => {
+    let mounted = true;
+    if (sessionId && !currentQuestion) {
+      setIsRestoringSession(true);
+      getTechnicalSession(sessionId)
+        .then((data) => {
+          if (!mounted) return;
+          if (data.is_complete) {
+            // Already finished -> clean cache and redirect to report
+            localStorage.removeItem("speakflow_active_technical_session");
+            navigate(`/technical/report/${sessionId}`, { replace: true });
+          } else if (data.current_question) {
+            setCurrentQuestion(data.current_question);
+            setQuestionCount(data.question_count || 0);
+            if (data.role) setRole(data.role);
+            if (data.target_company) setTargetCompany(data.target_company);
+            localStorage.setItem("speakflow_active_technical_session", String(sessionId));
+          }
+        })
+        .catch((err) => {
+          console.warn("Could not restore technical interview session:", err);
+          localStorage.removeItem("speakflow_active_technical_session");
+          setSessionId(null);
+        })
+        .finally(() => {
+          if (mounted) setIsRestoringSession(false);
+        });
+    }
+    return () => {
+      mounted = false;
+    };
+  }, [sessionId, currentQuestion, navigate]);
 
   // Timer effect
   useEffect(() => {
@@ -184,6 +228,7 @@ export default function TechnicalStudio() {
       setQuestionCount(0);
       setElapsedSeconds(0);
       setAnswerText("");
+      localStorage.setItem("speakflow_active_technical_session", String(res.session_id));
       if (res.current_question?.text) {
         handleSpeakQuestion(res.current_question.text);
       }
@@ -215,7 +260,8 @@ export default function TechnicalStudio() {
       const res = await submitTechnicalAnswer(sessionId, answerText.trim());
 
       if (res.is_complete && res.report) {
-        // Complete -> go directly to full report dossier
+        // Complete -> remove cached active session and go to report
+        localStorage.removeItem("speakflow_active_technical_session");
         navigate(`/technical/report/${sessionId}`);
       } else if (res.next_question) {
         setCurrentQuestion(res.next_question);
@@ -239,9 +285,20 @@ export default function TechnicalStudio() {
   };
 
   // -------------------------------------------------------------------------
-  // RENDER: SETUP VIEW (If no active session)
+  // RENDER: RESTORING OR SETUP VIEW
   // -------------------------------------------------------------------------
-  if (!sessionId) {
+  if (isRestoringSession) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[70vh] gap-4">
+        <div className="w-12 h-12 rounded-full border-2 border-secondary border-t-transparent animate-spin" />
+        <span className="font-headline-sm text-sm text-on-surface-variant font-medium">
+          Restoring your active Technical Interview session...
+        </span>
+      </div>
+    );
+  }
+
+  if (!sessionId || !currentQuestion) {
     return (
       <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-7xl mx-auto flex flex-col gap-8">
         {/* Ambient Backdrop Aura */}

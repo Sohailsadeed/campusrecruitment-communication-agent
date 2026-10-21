@@ -1,4 +1,4 @@
-export type SessionStatus = "pending" | "processing" | "completed" | "failed";
+export type SessionStatus = "pending" | "processing" | "in_progress" | "completed" | "failed";
 
 export interface CriticalRewrite {
   timestamp: string;

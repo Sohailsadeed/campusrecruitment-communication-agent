@@ -160,8 +160,8 @@ export default function HomePage() {
               <span>Avg 82 pts</span>
             </div>
             <button
-              onClick={() => handleStartWithPreset("technical", "Explain how distributed cache synchronization handles the thundering herd problem.")}
-              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-secondary group-hover:text-on-secondary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm"
+              onClick={() => navigate("/technical")}
+              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-secondary group-hover:text-on-secondary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               type="button"
             >
               <span>Start Technical Drill</span>

@@ -6,165 +6,166 @@ VerbalIQ implements a state-of-the-art **two-stage "extract cues → LLM fuses" 
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture O## 🏗️ Architecture Overview
 
 ```
-                                  [ Webcam & Microphone Stream ]
-                                                │
-                 ┌──────────────────────────────┴──────────────────────────────┐
-                 ▼                                                             ▼
-     [ Audio Stream (16kHz) ]                                      [ Video Stream (30 FPS) ]
-                 │                                                             │
-                 ▼                                                             │
-      Faster-Whisper + Silero VAD                                              │
-    (Tuned for 'uh'/'um' hesitations)                                          │
-                 │                                                             │
-                 ▼                                                             ▼
-      [ Utterance Time Windows ] ──────────────────────────────►  OpenCV Windowed Frame Sampler
-        [t_start ───► t_end]                                     (3-5 FPS strictly within speech)
-                 │                                                             │
-                 │                                                             ▼
-                 │                                                MediaPipe FaceMesh + Pose
-                 │                                              ├── Gaze (Screen-Offset Cone)
-                 │                                              ├── Posture Lean (Scale Proxy)
-                 │                                              ├── Head Pose & Brow Dynamics
-                 │                                              └── Hand Fidgets vs Gestures
-                 │                                                             │
-                 └──────────────────────────────┬──────────────────────────────┘
-                                                │
-                                                ▼
-                                 [ Aligned Multimodal Record ]
-                                 {
-                                   "utterance_id": 1,
-                                   "transcript": "...",
-                                   "face": { "eye_contact": 0.88, "expr": "confident" },
-                                   "gesture": { "posture": "upright", "events": [...] }
-                                 }
-                                                │
-                                                ▼
-                                    Ollama Qwen (qwen3.5:4b)
-                               (Native GBNF JSON Schema Enforcement)
-                                                │
-                 ┌──────────────────────────────┴──────────────────────────────┐
-                 ▼                                                             ▼
-     [ Executive Adjudication Report ]                              [ Auditory Coach Voice ]
-     ├── Verbal-Nonverbal Congruence Analysis                       ├── Edge-TTS (ChristopherNeural)
-     ├── 6-Axis Competency Radar Vector                             └── Avatar Gesture Sync
-     ├── Critical Moment Rewrites (A+ Polish)                           ('empathic_nod', 'open_palm')
-     └── Curated 15-Min Actionable Drills
+                                  [ Candidate Browser (Vite + React) ]
+                                                    │
+                 ┌──────────────────────────────────┴──────────────────────────────────┐
+                 ▼                                                                     ▼
+      [ Track 04: JAM Round ]                                              [ Track 01: Technical Round ]
+                 │                                                                     │
+     Faster-Whisper + Silero VAD                                           ChromaDB RAG Semantic Context
+   MediaPipe Vision + Prosody DSP                                        LangGraph 5-Stage Orchestrator
+                 │                                                                     │
+                 ▼                                                                     ▼
+    Local Qwen / Librosa Engine                                              NVIDIA Nemotron-3 550B
+  • 100-pt Infraction Penalty Math                                      (via OpenRouter / Ollama fallback)
+  • Micro-pauses & Cadence WPM                                                         │
+  • Decisive drop vs. Uptalk F0                                                        ▼
+                 │                                                   [ Student Articulation Analysis ]
+                 │                                                   ├── 1. Conciseness & Anti-Rambling
+                 │                                                   ├── 2. Jargon vs Applied Intuition
+                 │                                                   ├── 3. STAR Structure Breakdown
+                 │                                                   └── 4. Model 45s Concise Script
+                 │                                                                     │
+                 └──────────────────────────────────┬──────────────────────────────────┘
+                                                    │
+                                                    ▼
+                                  [ PostgreSQL 17 + Docker Services ]
+                                  ├── User Auth & Sandboxed Profiles
+                                  ├── Universal Sessions & Detailed Reports
+                                  └── Cross-Session Mem0 Memory Engine
 ```
 
 ---
 
-## ⚡ Key Capabilities
+## ⚡ Core Practice Modules
 
-### 1. Audio & Speech Analytics
-- **Faster-Whisper with Technical Lexicon Normalizer**: Employs an engineering domain initial prompt and an automated compounding normalizer to ensure technical terms (e.g. `"backend development"`, `"frontend"`, `"microservices"`, `"Kubernetes"`) transcribe accurately without phonetic splitting (e.g. avoiding `"back and development"`).
-- **Tuned Silero VAD**: Uses a calibrated threshold (`0.35`) and `250ms` speech padding to guarantee that soft vocal hesitations (`"uh"`, `"um"`, `"hmm"`) are preserved verbatim rather than clipped.
-- **Acoustic Pause Detection**: Calculates micro-hesitations and frozen pauses ($\ge 0.5\text{s}$) across speaking turns.
-- **Dynamic Cadence Sparkline**: Real-time interval WPM calculations across the session.
+### 1. Track 01: Conversational Technical Round (Student-Focused)
+Designed specifically for campus placement preparation and student engineering interviews:
+- **LangGraph State Orchestrator**: Dynamically cycles through 5 communication stages (Architectural Overview, Conceptual Simplification, Technical Disagreement, Outage Incident Communication, and Strategic Trade-offs).
+- **Dense RAG Resume Ingestion**: Chunks candidate PDF resumes and indexes 384-dimensional dense vectors in ChromaDB (`sentence-transformers/all-MiniLM-L6-v2`) to interrogate actual candidate projects.
+- **Student Communication Evaluation (Nemotron 550B)**:
+  - **Technical Conciseness & Anti-Rambling Metric**: Identifies circular monologues (4+ minutes) and empty padding; scores Signal-to-Noise Ratio (1-10) and pinpoints where the candidate should have concluded.
+  - **Jargon vs. Applied Understanding**: Differentiates memorized textbook definitions (e.g. GeeksforGeeks/Wikipedia verbatim) from practical applied intuition and real-world analogies.
+  - **STAR Structure Coach**: Automatically tracks whether project responses cover **S**ituation, **T**ask, **A**ction (specific personal implementation), and **R**esult (measurable impact).
+  - **Model 45-Second Concise Script**: Generates an exemplary concise answer script demonstrating how a top candidate would articulate the response without fluff.
+- **Stateful Resumption & Persistence**: Active technical sessions are preserved across tab switches and browser refreshes with one-click **Resume Drill ↗** support in Session History.
 
-### 2. Acoustic Prosody DSP Engine & Dual-Factor Confidence Index
-- **Pure Physical Soundwave Analysis**: Uses PyAV and SciPy/NumPy autocorrelation to extract vocal energy (RMS dB) and fundamental pitch frequency ($F_0$ in Hz) directly from raw audio streams with zero GPU overhead (~30ms CPU execution).
-- **Decoupled from Camera Gaze**: Eliminates webcam parallax distortion and eye contact noise from confidence scoring, basing poise strictly on vocal acoustic reality.
-- **Dual-Factor Confidence Index**:
-  $$\text{Confidence Score} = 0.50 \times \text{Acoustic Subscore} + 0.50 \times \text{Fluency \& Pause Subscore}$$
-  - **50% Soundwave Pitch & Vocal Energy**:
-    - **Vocal Projection**: Average RMS soundwave power in dB.
-    - **Pitch Modulation**: Optimal $F_0$ dynamic range (18–42 Hz std) rewarding executive vocal melody over monotone delivery.
-    - **Terminal Intonation**: Decisive downward drops ($F_0 \downarrow$) earn authority bonuses, while hesitant "uptalk" question inflections ($F_0 \uparrow$) incur penalties.
-  - **50% Behavioral Fluency & Pause Control**:
-    - Silence freeze penalties for dead pauses $\ge 2.0\text{s}$ and cumulative pause budgets $> 4.0\text{s}$.
-    - Continuity pacing between arguments.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Candidate as Student Candidate
+    participant UI as React Studio (Vite)
+    participant API as FastAPI Backend
+    participant RAG as ChromaDB Dense RAG
+    participant Graph as LangGraph Agent
+    participant LLM as Nemotron-3 550B
+    participant DB as PostgreSQL 17
 
-### 3. Utterance-Aligned Computer Vision (MediaPipe)
-- **Windowed Frame Extraction**: Processes video frames *only* when the candidate is speaking, cutting CV load by 70% and tying physical gestures directly to spoken clauses.
-- **Webcam Parallax Compensation**: Implements an elliptical screen-offset tolerance cone ($\pm 15^\circ$ buffer) so candidates aren't penalized for looking at the screen.
-- **Affective & Posture Telemetry**: Tracks eyebrow raise/furrow, head stability, torso lean via face magnification proxy, and hand-to-face touching (nervous fidget indicator) vs open-palm emphasis gestures.
+    Candidate->>UI: Uploads Resume (PDF)
+    UI->>API: POST /api/technical/resume/upload
+    API->>RAG: Index dense vectors (MiniLM-L6)
+    Candidate->>UI: Selects Role & Launches Drill
+    UI->>API: POST /api/technical/start
+    API->>RAG: Retrieve semantic resume context
+    API->>Graph: Initialize Interview State
+    Graph->>LLM: Synthesize Stage 1 Question
+    LLM-->>UI: Spoken / Text Technical Challenge
 
-### 4. Local LLM Fusion (Ollama with Native JSON Schema)
-- Powered by `qwen3.5:4b` running locally on Ollama.
-- Uses **Ollama's native JSON Schema mode** (`format: <schema>`) for token-level grammar logit masking, completely eliminating missing keys or conversational preamble.
-- Evaluates:
-  - **Verbal-Nonverbal Congruence**: Identifies instances where posture or gestures contradicted spoken technical claims.
-  - **6 Core Competencies**: Articulation & Clarity, Structure & STAR Logic, Technical Depth & Precision, Pacing & Strategic Pauses, Confidence & Assertive Tone, and Conciseness (Low Fluff).
-  - **Critical Moment Rewrites**: Side-by-side original sentence vs executive-level polished rewrite with letter grades (`C-` to `A+`) and actionable coaching tips.
+    loop 5 Adaptive Stages
+        Candidate->>UI: Speaks answer (Web Speech API)
+        UI->>API: POST /api/technical/answer
+        API->>LLM: Evaluate Conciseness, Jargon vs Intuition & STAR
+        LLM-->>API: Question Score (1-10) + Diagnostics + Model Script
+        API->>DB: Persist Question & Feedback Telemetry
+        API-->>UI: Next Technical Challenge OR Final Report
+    end
 
-### 5. Auditory Coach Avatar Voice (Text-to-Speech)
-- **Primary Voice**: Microsoft Edge Neural TTS (`en-US-ChristopherNeural`) producing an authoritative executive coach voice.
-- **Instant Fallback**: Browser-native Web Speech API if offline.
-- **Avatar Gesture Synchronization**: Schedules nonverbal reactions (`empathic_nod`, `attentive_tilt`, `open_palm_welcome`) aligned with spoken feedback.
-
-### 6. VerbalIQ Dark Cockpit UI
-- High-contrast cockpit theme built on `#10131a` surface baseline with custom tokens (`Plus Jakarta Sans`, `JetBrains Mono`, `Inter`).
-- **4 Track Practice Arena**:
-  - Track 01: Technical System Design
-  - Track 02: HR & Behavioral (STAR Method)
-  - Track 03: Guesstimates & Market Sizing
-  - Track 04: JAM Blitz (Just A Minute)
-- Interactive SVG Radar chart, filler timeline with time chips, and utterance-aligned nonverbal telemetry cards.
-- **Acoustic Impression Card**: Live telemetry displaying vocal energy in dB RMS, decisive drop vs. uptalk counts, pitch modulation score, and the dual 50-50 subscores breakdown.
+    API->>DB: Finalize Overall Dossier & Mem0 Memory
+    UI->>Candidate: Renders Interactive Evaluation Dossier
+```
 
 ---
 
-## 🚀 Quickstart Guide
+### 2. Track 04: JAM (Just-A-Minute) Round
+- **Deterministic Infraction Scoring**: Starts from **100.0 baseline points** and applies exact rule-based penalties:
+  - Fillers & Hesitations (`um`, `uh`, `you know`): $4.0\text{ pts}$ deduction (max $35\text{ pts}$).
+  - Pauses & Silence (via Librosa & VAD): $(\text{silence} - 3.0\text{s}) \times 2.5\text{ pts}$ + $8\text{ pts}$ if single freeze $\ge 2.0\text{s}$.
+  - Repetitions: $5.0\text{ pts}$ per repeated content word ($\ge 3$ occurrences).
+  - Duration Adherence: Penalties if $< 45\text{s}$ or $> 68\text{s}$ against the 60-second target.
+  - Cadence Pace: $5.0\text{ pts}$ if $< 100\text{ WPM}$ or $> 185\text{ WPM}$.
+- **Acoustic Prosody DSP**: Fundamental pitch frequency ($F_0$) dynamic range, RMS energy projection in dB, and decisive drops vs. hesitant uptalk.
+- **Utterance-Aligned Computer Vision**: MediaPipe FaceMesh & Pose tracking eye contact ratio, screen-offset cone tolerance, and head stability strictly during spoken intervals.
 
-### Prerequisites
-- Python 3.10+ (tested on Python 3.12)
-- Node.js 18+ & npm
-- [Ollama](https://ollama.com) installed and running
+---
 
-### 1. Launch Ollama Model
-Ensure Ollama is running, then verify or pull the model:
-```bash
-ollama run qwen3.5:4b
+### 3. Authentication & PostgreSQL Sandbox
+- **Encrypted JWT Authentication**: Clean login and signup flow stored in PostgreSQL.
+- **Landing Gatekeeper**: Automatic route protection routing unauthenticated visitors to `/login` before accessing the studio.
+- **Sandbox Isolation**: Resumes, progress trends, and interview histories are strictly sandboxed per authenticated user.
+
+---
+
+## 🐳 Docker Services Setup
+
+SpeakFlow relies on three core containerized services defined in `docker-compose.services.yml`:
+- **PostgreSQL 17** (`port 5432`): Relational data store for users, sessions, transcriptions, and technical evaluations.
+- **ChromaDB** (`port 8100`): Vector database for dense semantic resume RAG.
+- **Redis** (`port 6379`): Cache and background task broker.
+
+### Start Services
+```powershell
+docker compose -f docker-compose.services.yml up -d
 ```
 
-### 2. Backend Setup
-```bash
-cd speakflow/backend
-
-# Activate virtual environment
-# Windows:
-.\speakvenv\Scripts\activate
-# Linux/macOS:
-# source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install edge-tts
-
-# Run FastAPI backend
-python -m uvicorn main:app --reload --port 8000
+### Stop Services
+```powershell
+docker compose -f docker-compose.services.yml down
 ```
-Backend API will be live at `http://localhost:8000` (docs at `http://localhost:8000/docs`).
 
-### 3. Frontend Setup
-```bash
-cd speakflow/frontend
+---
 
-# Install packages
+## 🚀 Local Development Setup
+
+### 1. Backend (FastAPI + Python 3.12)
+```powershell
+cd backend
+# Activate your virtual environment
+& "..\.venv\Scripts\activate"
+
+# Start the API server
+uvicorn main:app --reload --port 8000
+```
+API Documentation will be live at `http://127.0.0.1:8000/docs`.
+
+### 2. Frontend (React + TypeScript + Vite)
+```powershell
+cd frontend
 npm install
-
-# Start Vite dev server
 npm run dev
 ```
 Open `http://localhost:5173` in your browser.
 
 ---
 
-## 📡 API Endpoints Summary
+## 📡 Key API Endpoints Summary
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/sessions` | Multipart video/audio upload with track type & topic |
-| `POST` | `/api/sessions/{id}/analyze` | Triggers Whisper + MediaPipe + Ollama adjudication pipeline |
-| `GET` | `/api/sessions/{id}` | Complete session report, metrics, and multimodal timeline |
-| `GET` | `/api/sessions/{id}/tts` | Synthesized MP3 audio stream of the coach's feedback |
-| `GET` | `/api/progress/summary` | Global progress, practice streak, and competency averages |
-| `GET` | `/api/progress/metrics` | Longitudinal performance time-series across practice sessions |
+| `POST` | `/api/auth/register` | Register new user in PostgreSQL |
+| `POST` | `/api/auth/login` | Login and receive bearer JWT |
+| `GET` | `/api/technical/resume/status` | Check authenticated candidate's active indexed resume |
+| `POST` | `/api/technical/resume/upload` | Ingest PDF resume into ChromaDB dense vectors |
+| `POST` | `/api/technical/start` | Launch LangGraph technical interview round |
+| `POST` | `/api/technical/answer` | Evaluate response for Conciseness, Jargon vs Intuition & STAR |
+| `GET` | `/api/technical/report/{id}` | Complete technical dossier with model scripts |
+| `POST` | `/api/sessions` | Multipart video/audio upload for JAM round |
+| `POST` | `/api/sessions/{id}/analyze` | Triggers Whisper + MediaPipe + Librosa DSP pipeline |
+| `GET` | `/api/progress/summary` | Global progress, practice streak, and competency radar |
 
 ---
 
 ## 📄 License
-MIT. Built for Campus Recruitment & Executive Speaking Preparation.
+MIT. Built for Campus Recruitment & Placement Communication Preparation.

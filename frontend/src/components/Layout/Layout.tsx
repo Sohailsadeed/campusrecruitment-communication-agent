@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { Link, useLocation, Outlet } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 export default function Layout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, isAuthenticated, logout, openAuthModal } = useAuth();
 
   const navItems = [
     { path: "/", label: "Practice Arena", icon: "grid_view" },
-    { path: "/record", label: "Live Session", icon: "sensors", pulse: true },
+    { path: "/record", label: "Live JAM Session", icon: "sensors", pulse: true },
+    { path: "/technical", label: "Technical Drill", icon: "terminal" },
     { path: "/dashboard", label: "Pattern & Progress", icon: "insights" },
   ];
 
@@ -143,7 +146,7 @@ export default function Layout() {
             </div>
 
             <span className="font-label-numeric-sm text-[11px] px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary border border-primary/20">
-              Tier 3 Candidate
+              {isAuthenticated ? "Tier 3 Candidate" : "Guest Sandbox"}
             </span>
           </div>
 
@@ -165,19 +168,38 @@ export default function Layout() {
 
             <div className="h-5 w-px bg-outline-variant/30 hidden sm:block" />
 
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-surface-container-highest ring-1 ring-outline-variant/50 flex items-center justify-center font-bold text-xs text-primary">
-                AR
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 ring-1 ring-primary/40 flex items-center justify-center font-bold text-xs text-primary shadow-sm">
+                  {(user.full_name || user.username || "U").substring(0, 2).toUpperCase()}
+                </div>
+                <div className="hidden xl:flex flex-col text-left">
+                  <span className="text-xs font-semibold text-on-surface leading-none">
+                    {user.full_name || user.username}
+                  </span>
+                  <span className="font-label-numeric-sm text-[10px] text-outline leading-tight mt-0.5 truncate max-w-[120px]">
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Sign Out"
+                  className="p-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface transition-colors cursor-pointer ml-1"
+                >
+                  <span className="material-symbols-outlined text-[18px]">logout</span>
+                </button>
               </div>
-              <div className="hidden xl:flex flex-col text-left">
-                <span className="text-xs font-semibold text-on-surface leading-none">
-                  Alex Rivera
-                </span>
-                <span className="font-label-numeric-sm text-[10px] text-outline leading-tight mt-0.5">
-                  alex.r@verbal.iq
-                </span>
-              </div>
-            </div>
+            ) : (
+              <button
+                type="button"
+                onClick={openAuthModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high border border-outline-variant/50 hover:border-primary/50 text-on-surface hover:text-primary transition-all text-xs font-semibold cursor-pointer shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">login</span>
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </header>
 

@@ -126,9 +126,9 @@ def list_sessions(
     if round_type:
         stmt = stmt.where(SessionModel.round_type == round_type)
     if current_user is not None:
-        stmt = stmt.where(
-            (SessionModel.user_id == current_user.id) | (SessionModel.user_id.is_(None))
-        )
+        stmt = stmt.where(SessionModel.user_id == current_user.id)
+    else:
+        stmt = stmt.where((SessionModel.user_id == 1) | (SessionModel.user_id.is_(None)))
     stmt = stmt.offset(offset).limit(limit)
     rows = db.scalars(stmt).all()
     return [SessionOut.model_validate(r) for r in rows]

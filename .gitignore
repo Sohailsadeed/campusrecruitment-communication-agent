@@ -31,3 +31,5 @@ coverage/
 frontend/dist/
 backend/uploads/
 backend/instance/
+.vite/
+frontend/.vite/

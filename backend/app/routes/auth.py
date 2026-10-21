@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database.engine import get_db
@@ -65,7 +65,13 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> Token:
 
 @router.post("/login", response_model=Token)
 def login(payload: UserLogin, db: Session = Depends(get_db)) -> Token:
-    user = db.scalar(select(User).where(User.email == payload.email))
+    identifier = payload.email.strip().lower()
+    user = db.scalar(
+        select(User).where(
+            (func.lower(User.email) == identifier)
+            | (func.lower(User.username) == identifier)
+        )
+    )
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -87,3 +93,44 @@ def me(authorization: Optional[str] = Header(default=None), db: Session = Depend
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return UserOut.model_validate(user)
+
+
+def get_optional_current_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Extract authenticated user if JWT token is provided; otherwise return None (guest)."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        subject = decode_token(token)
+        if subject:
+            return db.scalar(select(User).where(User.email == subject))
+    return None
+
+
+def get_current_user(
+    authorization: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+) -> User:
+    """Extract and validate JWT, or fallback to default local user for local studio drills."""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1]
+        subject = decode_token(token)
+        if subject:
+            user = db.scalar(select(User).where(User.email == subject))
+            if user:
+                return user
+
+    # Fallback for dev / unauthenticated local use
+    user = db.scalar(select(User).order_by(User.id.asc()))
+    if not user:
+        user = User(
+            email="developer@verbaliq.local",
+            username="candidate",
+            full_name="Alex Rivera",
+            hashed_password=hash_password("verbaliq123"),
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user

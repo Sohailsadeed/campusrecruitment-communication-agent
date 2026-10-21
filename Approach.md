@@ -134,22 +134,107 @@ Both modules utilize a shared three-layer pipeline architecture. Instead of depl
 
 ---
 
-## 7. Phased Implementation Plan
+## 8. Architectural Evolution: Post-Mortem & Current State
 
-### Phase 1: Core Framework & Text Workflows
-* Set up the PostgreSQL schema (`sessions`, `questions`, `rubrics`, `evaluations`).
-* Implement Java Spring Boot session management and Spring AI integration.
-* Build the HR text-based workflow (Start -> Type Answer -> Assess -> Follow-up -> Evaluate).
-* Enforce backend limits and validate JSON data contracts.
+### A. Failure Analysis of the Initial Approach (Why the Java + Python Dual-Service Model Failed)
 
-### Phase 2: Python Audio Service & JAM Foundation
-* Deploy the Python FastAPI service with WhisperX and VAD.
-* Implement the audio ingestion pipeline in Java and React.
-* Build the objective metrics engine for JAM (WPM, pauses, fillers).
-* Integrate the LLM subjective evaluator for JAM transcripts.
+The initial architecture (documented in Sections 1–7 above) proposed a **Java Spring Boot orchestrator** coupled to an external **Python speech service** and a secondary LLM layer. During development, this approach encountered several critical bottlenecks:
 
-### Phase 3: Unified Dashboards & Refinement
-* Develop the React frontend evaluation dashboards (metrics, rubric scores, strengths, transcript highlights).
-* Implement audio storage strategy (store audio in object storage, keep keys in Postgres).
-* Conduct human-in-the-loop review of evaluations to tune prompts and rubrics.
-* Expand the HR question bank and JAM topic library.
+```mermaid
+graph TD
+    subgraph Initial Failed Approach
+        A1[React Frontend] -->|Multipart Audio| B1[Java Spring Boot]
+        B1 -->|HTTP Re-stream Overhead| C1[Python FastAPI WhisperX]
+        C1 -->|Latency & Network Gaps| B1
+        B1 -->|Sync LLM Blocking| D1[Spring AI Evaluator]
+        D1 -->|String Substring Checks| B1
+        B1 -->|Complex Multi-Hop Sync| E1[PostgreSQL]
+    end
+    
+    style B1 fill:#ef4444,stroke:#991b1b,color:#fff
+    style C1 fill:#f59e0b,stroke:#b45309,color:#fff
+```
+
+1. **Dual-Service Latency & Network Overhead**: Streaming high-bitrate media from React to Spring Boot, then re-streaming it over internal HTTP to a Python FastAPI service, introduced double serialization, network buffering, and connection timeout risks during 60-second audio bursts.
+2. **Double Machine Learning Maintenance Burden**: Splitting ML logic between Python (speech/DSP) and Java (Spring AI) created fragmented dependency environments, making local execution and deployment unnecessarily complex.
+3. **Rigid Scripted Interview Flow**: The initial static rubric pipeline (`PRESENT` vs. `MISSING`) couldn't handle real-time conversational state transitions, resume grounding, or adaptive multi-turn pushback.
+4. **Lack of Visual & Prosody Grounding**: The original approach evaluated transcripts purely as plain text, missing physical confidence signals (pitch dynamics, uptalk vs. decisive drops, gaze alignment, and nervous gestures).
+
+---
+
+### B. Current Production Architecture (Unified FastAPI + LangGraph + Dense RAG)
+
+The platform was consolidated into a unified, high-performance architecture:
+
+```mermaid
+graph TD
+    subgraph Current Unified Architecture (VerbalIQ v2.4)
+        Client[React 18 + Vite Cockpit] -->|Direct JWT REST & Audio Stream| API[FastAPI Unified Backend]
+        
+        API -->|Deterministic DSP & Speech| DSP[PyAV + Librosa + Silero VAD]
+        API -->|Affective Visual Analytics| CV[MediaPipe FaceMesh & Pose]
+        
+        API -->|Semantic Document Embeddings| RAG[(ChromaDB Dense Vectors\nall-MiniLM-L6-v2)]
+        API -->|5-Stage State Graph| Agent[LangGraph Conversational Agent]
+        
+        Agent -->|Adaptive Interview & Articulation Coaching| LLM[NVIDIA Nemotron-3 550B\nLocal Qwen Fallback]
+        
+        API -->|Sandboxed Profiles & Telemetry| DB[(PostgreSQL 17\nDocker Container)]
+    end
+
+    style API fill:#10b981,stroke:#047857,color:#fff
+    style Agent fill:#6366f1,stroke:#4338ca,color:#fff
+    style DB fill:#0ea5e9,stroke:#0284c7,color:#fff
+```
+
+### C. Architectural Comparison Matrix
+
+| Architectural Dimension | Initial Approach (Proposed) | Current Production State |
+| :--- | :--- | :--- |
+| **Backend Layer** | Java Spring Boot (Layer 3) + Python FastAPI (Layer 1) | **Unified Python FastAPI (Async ASGI)** |
+| **Speech & Audio DSP** | WhisperX + Silero via HTTP inter-service call | **Native Faster-Whisper + Silero VAD + Librosa DSP** |
+| **Visual Multimodal** | None (Transcripts only) | **MediaPipe FaceMesh & Posture tracking strictly during speech** |
+| **Interview Orchestration**| Rigid static single follow-up logic | **LangGraph 5-Stage Adaptive State Machine** |
+| **Resume Grounding** | None (Static question library) | **Dense RAG via ChromaDB (`all-MiniLM-L6-v2` dense vectors)** |
+| **Evaluation Model** | Generic Spring AI JSON prompt | **Nemotron-3 550B + Token-level JSON Schema logit masking** |
+| **Student Communication Focus** | Basic rubric presence | **Conciseness (SNR), Anti-Rambling, Jargon vs. Intuition & STAR Coach** |
+| **Containerization** | Proposed multi-service setup | **Docker Compose (PostgreSQL 17 + ChromaDB + Redis)** |
+
+---
+
+### D. Current State Data Flow (Technical Interview Round)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor S as Student Candidate
+    participant UI as React 18 Frontend
+    participant API as FastAPI Backend
+    participant RAG as ChromaDB (Dense Vectors)
+    participant LG as LangGraph Agent
+    participant LLM as NVIDIA Nemotron 550B
+    participant DB as PostgreSQL 17
+
+    S->>UI: Uploads Resume (PDF)
+    UI->>API: POST /api/technical/resume/upload
+    API->>RAG: Chunks & indexes dense embeddings
+    S->>UI: Selects Role & Launches Drill
+    UI->>API: POST /api/technical/start
+    API->>RAG: Fetches top-k semantic resume context
+    API->>LG: Initializes 5-Stage Graph State
+    LG->>LLM: Synthesizes Stage 1 Challenge
+    LLM-->>UI: Verbal / Written Technical Question
+
+    loop 5 Adaptive Communication Stages
+        S->>UI: Articulates Answer Spoken or Text
+        UI->>API: POST /api/technical/answer
+        API->>LG: Evaluates Articulation
+        LG->>LLM: Analyzes Conciseness, Anti-Rambling, Jargon & STAR
+        LLM-->>LG: Question Score (1-10) + Critique + 45s Model Script
+        LG->>DB: Stores Stage Record in PostgreSQL
+        LG-->>UI: Next Stage Challenge OR Final Report
+    end
+
+    LG->>DB: Commits Overall Score & Mem0 Cross-Session Memory
+    UI->>S: Renders Interactive Technical Assessment Dossier
+```

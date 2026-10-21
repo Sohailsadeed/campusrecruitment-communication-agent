@@ -290,11 +290,11 @@ export default function HomePage() {
               <span>Avg 79 pts</span>
             </div>
             <button
-              onClick={() => handleStartWithPreset("guesstimate", "Estimate the annual market size of cloud storage in Southeast Asia.")}
-              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-tertiary group-hover:text-on-tertiary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm"
+              onClick={() => navigate("/guesstimate")}
+              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-tertiary group-hover:text-on-tertiary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               type="button"
             >
-              <span>Start Guesstimate Drill</span>
+              <span>Launch Guesstimate Studio</span>
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </button>
           </div>

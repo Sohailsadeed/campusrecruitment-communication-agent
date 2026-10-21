@@ -62,6 +62,11 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                       Technical
                     </span>
                   )}
+                  {s.round_type === "guesstimate" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-tertiary/15 text-tertiary border border-tertiary/30 uppercase tracking-wider">
+                      Guesstimate
+                    </span>
+                  )}
                   <StatusBadge status={s.status} />
                 </div>
                 <div className="text-xs text-outline">
@@ -76,21 +81,33 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                   <span className="font-medium text-secondary">
                     {Math.round(s.duration_seconds)}s
                   </span>{" "}
-                  {s.round_type === "technical" ? "drill" : "take"}
+                  {s.round_type === "technical" || s.round_type === "guesstimate" ? "drill" : "take"}
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                {s.status === "in_progress" && s.round_type === "technical" ? (
+                {s.status === "in_progress" ? (
                   <Link
-                    to={`/technical/${s.id}`}
+                    to={
+                      s.round_type === "guesstimate"
+                        ? `/guesstimate/${s.id}`
+                        : s.round_type === "technical"
+                        ? `/technical/${s.id}`
+                        : `/record?session_id=${s.id}`
+                    }
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-on-secondary font-bold text-xs hover:bg-secondary/90 transition-all shadow-sm"
                   >
                     Resume Drill <ArrowUpRight className="w-3.5 h-3.5" />
                   </Link>
                 ) : (
                   <Link
-                    to={s.round_type === "technical" ? `/technical/report/${s.id}` : `/analysis/${s.id}`}
+                    to={
+                      s.round_type === "guesstimate"
+                        ? `/guesstimate/report/${s.id}`
+                        : s.round_type === "technical"
+                        ? `/technical/report/${s.id}`
+                        : `/analysis/${s.id}`
+                    }
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container-high text-primary border border-primary/20 hover:bg-primary hover:text-on-primary font-medium text-xs transition-colors"
                   >
                     View Report <ArrowUpRight className="w-3.5 h-3.5" />

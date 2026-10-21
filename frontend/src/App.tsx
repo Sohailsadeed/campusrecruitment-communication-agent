@@ -7,6 +7,8 @@ import DashboardPage from "./pages/DashboardPage";
 import SettingsPage from "./pages/SettingsPage";
 import TechnicalStudio from "./pages/technical/TechnicalStudio";
 import TechnicalReport from "./pages/technical/TechnicalReport";
+import GuesstimateStudio from "./pages/guesstimate/GuesstimateStudio";
+import GuesstimateReport from "./pages/guesstimate/GuesstimateReport";
 import AuthPage from "./pages/AuthPage";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthModal from "./components/Auth/AuthModal";
@@ -48,6 +50,9 @@ export default function App() {
           <Route path="/technical" element={<TechnicalStudio />} />
           <Route path="/technical/:sessionId" element={<TechnicalStudio />} />
           <Route path="/technical/report/:sessionId" element={<TechnicalReport />} />
+          <Route path="/guesstimate" element={<GuesstimateStudio />} />
+          <Route path="/guesstimate/:sessionId" element={<GuesstimateStudio />} />
+          <Route path="/guesstimate/report/:sessionId" element={<GuesstimateReport />} />
           <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/settings" element={<SettingsPage />} />

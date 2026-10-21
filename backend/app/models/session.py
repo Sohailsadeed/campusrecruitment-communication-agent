@@ -53,6 +53,12 @@ class Session(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    guesstimate_detail: Mapped[Optional["GuesstimateCase"]] = relationship(  # type: ignore[name-defined]
+        "GuesstimateCase",
+        back_populates="session",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Transcription(Base):

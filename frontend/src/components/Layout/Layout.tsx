@@ -11,6 +11,7 @@ export default function Layout() {
     { path: "/", label: "Practice Arena", icon: "grid_view" },
     { path: "/record", label: "Live JAM Session", icon: "sensors", pulse: true },
     { path: "/technical", label: "Technical Drill", icon: "terminal" },
+    { path: "/guesstimate", label: "Guesstimate Sizing", icon: "query_stats" },
     { path: "/dashboard", label: "Pattern & Progress", icon: "insights" },
   ];
 

@@ -6,6 +6,56 @@ export interface ModelTreeStep {
   estimated_value: string;
 }
 
+export interface CandidateEstimateStructured {
+  value?: number | null;
+  unit?: string;
+  period?: string;
+  geography?: string;
+  formatted_display?: string;
+}
+
+export interface PlausibleRangeStructured {
+  min?: number | null;
+  max?: number | null;
+  unit?: string;
+  period?: string;
+  geography?: string;
+  benchmark_source?: string;
+  formatted_display?: string;
+}
+
+export interface RangeDiagnostic {
+  status: "within_range" | "below_range" | "above_range" | "unit_mismatch" | "unavailable";
+  is_within_range?: boolean | null;
+  variance_percent?: number | null;
+  unit_match?: boolean;
+  summary_label: string;
+  diagnostic_note: string;
+}
+
+export interface BranchEvidence {
+  branch_name: string;
+  status: "supported_mece" | "confirmed_overlap" | "omitted_segment" | "unsupported_proxy" | "unclear_evidence";
+  formula_or_proxy: string;
+  estimated_value: string;
+  evidence_rationale: string;
+}
+
+export interface SensitivityAnalysis {
+  status: "computed" | "unavailable" | "insufficient_formula_articulation";
+  driver_name: string;
+  formula_expression?: string;
+  baseline_driver_value?: number;
+  low_driver_value?: number;
+  high_driver_value?: number;
+  driver_unit?: string;
+  baseline_estimate?: number;
+  low_estimate?: number;
+  high_estimate?: number;
+  impact_percent?: number;
+  explanation: string;
+}
+
 export interface GuesstimateEvaluation {
   overall_score: number;
   mece_score: number;
@@ -18,6 +68,18 @@ export interface GuesstimateEvaluation {
   sanity_check_feedback: string;
   candidate_final_estimate?: string;
   plausible_industry_range?: string;
+  candidate_estimate_structured?: CandidateEstimateStructured | null;
+  plausible_range_structured?: PlausibleRangeStructured | null;
+  range_diagnostic?: RangeDiagnostic | null;
+  candidate_branch_diagnostics?: BranchEvidence[];
+  sensitivity_analysis?: SensitivityAnalysis | null;
+  scoring_weights?: {
+    mece: number;
+    assumption: number;
+    math: number;
+    sanity: number;
+    formula_display: string;
+  };
   model_approach_name?: string;
   model_breakdown_steps?: ModelTreeStep[];
   strengths: string[];

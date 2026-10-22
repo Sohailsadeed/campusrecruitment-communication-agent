@@ -80,18 +80,74 @@ export async function getTechnicalProgress(): Promise<TechnicalProgressResponse>
   return data;
 }
 
+export interface CandidateEstimateStructured {
+  value?: number | null;
+  unit?: string;
+  period?: string;
+  geography?: string;
+  formatted_display?: string;
+}
+
+export interface PlausibleRangeStructured {
+  min?: number | null;
+  max?: number | null;
+  unit?: string;
+  period?: string;
+  geography?: string;
+  benchmark_source?: string;
+  formatted_display?: string;
+}
+
+export interface RangeDiagnostic {
+  status: "within_range" | "below_range" | "above_range" | "unit_mismatch" | "unavailable";
+  is_within_range?: boolean | null;
+  variance_percent?: number | null;
+  unit_match?: boolean;
+  summary_label: string;
+  diagnostic_note: string;
+}
+
+export interface BranchEvidence {
+  branch_name: string;
+  status: "supported_mece" | "confirmed_overlap" | "omitted_segment" | "unsupported_proxy" | "unclear_evidence";
+  formula_or_proxy: string;
+  estimated_value: string;
+  evidence_rationale: string;
+}
+
+export interface SensitivityAnalysis {
+  status: "computed" | "unavailable" | "insufficient_formula_articulation";
+  driver_name: string;
+  formula_expression?: string;
+  baseline_driver_value?: number;
+  low_driver_value?: number;
+  high_driver_value?: number;
+  driver_unit?: string;
+  baseline_estimate?: number;
+  low_estimate?: number;
+  high_estimate?: number;
+  impact_percent?: number;
+  explanation: string;
+}
+
 export interface GuesstimateTimelinePoint {
   session_id: number;
   title: string;
   category: string;
   difficulty: string;
   score: number;
-  structure_score: number;
-  math_score: number;
-  proxy_score: number;
-  sanity_score: number;
+  structure_score?: number | null;
+  math_score?: number | null;
+  proxy_score?: number | null;
+  sanity_score?: number | null;
   verdict: string;
   created_at: string;
+  candidate_estimate?: CandidateEstimateStructured | string | null;
+  plausible_range?: PlausibleRangeStructured | string | null;
+  range_diagnostic?: RangeDiagnostic | null;
+  sensitivity_analysis?: SensitivityAnalysis | null;
+  candidate_branch_diagnostics?: BranchEvidence[];
+  model_breakdown_steps?: Array<{ step_name: string; formula_or_proxy: string; estimated_value: string }>;
 }
 
 export interface GuesstimateCategoryMetric {
@@ -108,6 +164,22 @@ export interface GuesstimateProgressResponse {
     avg_score: number;
     peak_score: number;
     latest_verdict: string;
+    is_single_attempt?: boolean;
+    weighting_metadata?: {
+      mece: number;
+      assumption: number;
+      math: number;
+      sanity: number;
+      formula_display: string;
+    };
+    latest_diagnostics?: {
+      candidate_estimate?: CandidateEstimateStructured | string | null;
+      plausible_range?: PlausibleRangeStructured | string | null;
+      range_diagnostic?: RangeDiagnostic | null;
+      sensitivity_analysis?: SensitivityAnalysis | null;
+      candidate_branch_diagnostics?: BranchEvidence[];
+      model_breakdown_steps?: Array<{ step_name: string; formula_or_proxy: string; estimated_value: string }>;
+    } | null;
   };
   categories: GuesstimateCategoryMetric[];
 }

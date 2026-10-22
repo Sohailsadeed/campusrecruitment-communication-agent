@@ -264,6 +264,15 @@ def get_guesstimate_progress(
     category_scores: Dict[str, List[float]] = {}
     completed_scores: List[float] = []
 
+    def _extract_metric(eval_data: dict, *keys: str) -> Optional[float]:
+        for k in keys:
+            if k in eval_data and eval_data[k] is not None:
+                try:
+                    return round(float(eval_data[k]), 1)
+                except (ValueError, TypeError):
+                    pass
+        return None
+
     for s in sessions:
         score = s.overall_score
         gc = s.guesstimate_detail
@@ -284,18 +293,29 @@ def get_guesstimate_progress(
             category = gc.category if gc else "General Sizing"
             category_scores.setdefault(category, []).append(float(score))
 
+            mece_score = _extract_metric(evaluation, "mece_score", "structure_score")
+            math_score = _extract_metric(evaluation, "mental_math_score", "math_score")
+            proxy_score = _extract_metric(evaluation, "assumption_score", "proxy_score")
+            sanity_score = _extract_metric(evaluation, "sanity_check_score", "sanity_score")
+
             timeline.append({
                 "session_id": s.id,
                 "title": s.title,
                 "category": category,
                 "difficulty": gc.difficulty if gc else "Intermediate",
                 "score": round(float(score), 1),
-                "structure_score": evaluation.get("mece_score") or evaluation.get("structure_score", 0),
-                "math_score": evaluation.get("mental_math_score") or evaluation.get("math_score", 0),
-                "proxy_score": evaluation.get("assumption_score") or evaluation.get("proxy_score", 0),
-                "sanity_score": evaluation.get("sanity_check_score") or evaluation.get("sanity_score", 0),
+                "structure_score": mece_score,
+                "math_score": math_score,
+                "proxy_score": proxy_score,
+                "sanity_score": sanity_score,
                 "verdict": verdict,
                 "created_at": s.created_at.isoformat(),
+                "candidate_estimate": evaluation.get("candidate_estimate_structured") or evaluation.get("candidate_final_estimate"),
+                "plausible_range": evaluation.get("plausible_range_structured") or evaluation.get("plausible_industry_range"),
+                "range_diagnostic": evaluation.get("range_diagnostic"),
+                "sensitivity_analysis": evaluation.get("sensitivity_analysis"),
+                "candidate_branch_diagnostics": evaluation.get("candidate_branch_diagnostics", []),
+                "model_breakdown_steps": evaluation.get("model_breakdown_steps", []),
             })
 
     total_drills = len(sessions)
@@ -309,6 +329,8 @@ def get_guesstimate_progress(
     ]
     categories.sort(key=lambda c: c["avg_score"], reverse=True)
 
+    latest_item = timeline[-1] if timeline else None
+
     return {
         "timeline": timeline,
         "summary": {
@@ -316,7 +338,23 @@ def get_guesstimate_progress(
             "completed_drills": completed_drills,
             "avg_score": avg_score,
             "peak_score": peak_score,
-            "latest_verdict": timeline[-1]["verdict"] if timeline else "No Drills Yet",
+            "latest_verdict": latest_item["verdict"] if latest_item else "No Drills Yet",
+            "is_single_attempt": completed_drills == 1,
+            "weighting_metadata": {
+                "mece": 35,
+                "assumption": 25,
+                "math": 20,
+                "sanity": 20,
+                "formula_display": "35% MECE + 25% Assumptions + 20% Math + 20% Sanity Check",
+            },
+            "latest_diagnostics": {
+                "candidate_estimate": latest_item.get("candidate_estimate") if latest_item else None,
+                "plausible_range": latest_item.get("plausible_range") if latest_item else None,
+                "range_diagnostic": latest_item.get("range_diagnostic") if latest_item else None,
+                "sensitivity_analysis": latest_item.get("sensitivity_analysis") if latest_item else None,
+                "candidate_branch_diagnostics": latest_item.get("candidate_branch_diagnostics") if latest_item else [],
+                "model_breakdown_steps": latest_item.get("model_breakdown_steps") if latest_item else [],
+            } if latest_item else None,
         },
         "categories": categories,
     }
@@ -577,6 +615,11 @@ def get_placement_readiness(
 
     is_guess_ready = bool(latest_guess_score and latest_guess_score >= 75)
 
+    mece_disp = latest_guess_eval.get("mece_score") if "mece_score" in latest_guess_eval else latest_guess_eval.get("structure_score")
+    proxy_disp = latest_guess_eval.get("assumption_score") if "assumption_score" in latest_guess_eval else latest_guess_eval.get("proxy_score")
+    sanity_disp = latest_guess_eval.get("sanity_check_score") if "sanity_check_score" in latest_guess_eval else latest_guess_eval.get("sanity_score")
+    math_disp = latest_guess_eval.get("mental_math_score") if "mental_math_score" in latest_guess_eval else latest_guess_eval.get("math_score")
+
     guesstimate_card = {
         "key": "guesstimate",
         "title": "Guesstimate & Market Sizing",
@@ -585,7 +628,7 @@ def get_placement_readiness(
         "completed_count": len(guesstimate_completed),
         "latest_attempt_at": latest_guess.created_at.isoformat() if latest_guess else None,
         "latest_session_id": latest_guess.id if latest_guess else None,
-        "status": "ready" if is_guess_ready else ("in_progress" if latest_guess else "not_attempted"),
+        "status": "ready" if is_guess_ready else ("in_progress" if (latest_guess and len(guesstimate_completed) == 0) else ("developing" if latest_guess else "not_attempted")),
         "primary_metric": {
             "label": "MECE Framework",
             "value": round(float(latest_guess_score), 1) if latest_guess_score is not None else None,
@@ -594,20 +637,23 @@ def get_placement_readiness(
         "secondary_metrics": [
             {
                 "label": "Decomposition",
-                "value": f"{latest_guess_eval.get('mece_score') or latest_guess_eval.get('structure_score', 0)}%" if latest_guess_eval else "—",
+                "value": f"{round(float(mece_disp), 1)}%" if mece_disp is not None else "—",
                 "unit": "MECE",
             },
             {
-                "label": "Math Sanity",
-                "value": f"{latest_guess_eval.get('mental_math_score') or latest_guess_eval.get('math_score', 0)}%" if latest_guess_eval else "—",
-                "unit": "accuracy",
-            },
-            {
                 "label": "Proxy Rigor",
-                "value": f"{latest_guess_eval.get('assumption_score') or latest_guess_eval.get('proxy_score', 0)}%" if latest_guess_eval else "—",
+                "value": f"{round(float(proxy_disp), 1)}%" if proxy_disp is not None else "—",
                 "unit": "assumptions",
             },
+            {
+                "label": "Sanity Check",
+                "value": f"{round(float(sanity_disp), 1)}%" if sanity_disp is not None else "—",
+                "unit": "validation",
+            },
         ],
+        "extended_metrics": {
+            "mental_math": f"{round(float(math_disp), 1)}%" if math_disp is not None else "—",
+        },
         "drill_path": "/guesstimate",
         "report_path": f"/guesstimate/report/{latest_guess.id}" if latest_guess else None,
     }

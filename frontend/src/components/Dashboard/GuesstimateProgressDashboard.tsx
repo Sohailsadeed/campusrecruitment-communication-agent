@@ -478,7 +478,7 @@ export default function GuesstimateProgressDashboard({
                 <div className="flex items-center justify-between">
                   <span className="font-label-caps text-[10px] uppercase text-outline font-bold flex items-center gap-1">
                     <span className="material-symbols-outlined text-amber-400 text-[15px]">tune</span>
-                    Critical Sensitivity Driver
+                    {latestSensitivity?.tornado_ranking && latestSensitivity.tornado_ranking.length > 1 ? "Tornado Sensitivity Ranking" : "Critical Sensitivity Driver"}
                   </span>
                   {latestSensitivity?.impact_percent != null && (
                     <span className="font-label-numeric font-bold text-xs text-amber-400">

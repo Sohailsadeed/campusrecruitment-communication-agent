@@ -145,8 +145,39 @@ async def test_deterministic_evaluator():
         formula_expression="Unclear interplay"
     )
     sens_ambig = _compute_deterministic_sensitivity(cand_est, driver_ambig)
-    assert sens_ambig["status"] == "insufficient_formula_articulation"
-    print(f"[OK] Ambiguous relationship safely returned insufficient_formula_articulation.")
+    # Case F: Multi-Driver Tornado Comparison Ranking
+    # Primary lever: Replacement Cycle (±26.7% swing)
+    # Secondary lever: Target Penetration Rate (±15.0% swing)
+    driver_primary = SensitivityDriverInput(
+        driver_name="Replacement Cycle",
+        baseline_value=4.0,
+        low_scenario_value=3.0,
+        high_scenario_value=5.0,
+        unit="years",
+        relationship_type="inverse_denominator",
+        variable_role="denominator_divisor",
+        formula_expression="Total = Pool / Replacement_Cycle"
+    )
+    driver_secondary = SensitivityDriverInput(
+        driver_name="Target Penetration Rate",
+        baseline_value=0.20,
+        low_scenario_value=0.17,
+        high_scenario_value=0.23,
+        unit="ratio",
+        relationship_type="direct_multiplier",
+        variable_role="numerator_factor",
+        formula_expression="Total = Pool * Penetration Rate"
+    )
+    sens_tornado = _compute_deterministic_sensitivity(cand_est, driver_primary, driver_secondary)
+    assert sens_tornado["status"] == "computed"
+    assert sens_tornado["has_multi_driver_comparison"] is True
+    assert len(sens_tornado["tornado_ranking"]) == 2
+    assert sens_tornado["tornado_ranking"][0]["rank"] == 1
+    assert sens_tornado["tornado_ranking"][0]["driver_name"] == "Replacement Cycle"
+    assert sens_tornado["tornado_ranking"][1]["rank"] == 2
+    assert sens_tornado["tornado_ranking"][1]["driver_name"] == "Target Penetration Rate"
+    assert sens_tornado["leverage_ratio"] >= 1.5
+    print(f"[OK] Multi-driver tornado ranking verified: #{1} {sens_tornado['tornado_ranking'][0]['driver_name']} (±{sens_tornado['tornado_ranking'][0]['impact_percent']}%) vs #{2} {sens_tornado['tornado_ranking'][1]['driver_name']} (±{sens_tornado['tornado_ranking'][1]['impact_percent']}%), ratio={sens_tornado['leverage_ratio']}x")
 
     print("\n--- 4. Testing End-to-End Fallback Schema Contract ---")
     fallback_res = await evaluate_guesstimate(

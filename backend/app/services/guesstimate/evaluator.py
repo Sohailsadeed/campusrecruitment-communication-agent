@@ -185,6 +185,10 @@ class GuesstimateEvaluationSchema(BaseModel):
         default=None,
         description="The primary driver variable in candidate's equation with low/high scenario bounds",
     )
+    secondary_sensitivity_driver: Optional[SensitivityDriverInput] = Field(
+        default=None,
+        description="Optional secondary driver variable (e.g. price, ticket size, or frequency) for multi-driver tornado comparison",
+    )
     
     strengths: List[str] = Field(
         default_factory=list,
@@ -232,10 +236,11 @@ _guesstimate_prompt = ChatPromptTemplate.from_messages(
             "- Candidate Tree Evidence: Classify candidate branches as 'supported_mece', 'confirmed_overlap', 'omitted_segment', 'unsupported_proxy', or 'unclear_evidence'. If the candidate did not state a branch clearly enough, classify as 'unclear_evidence' rather than making unsupported assumptions.\n"
             "- Unit & Period Normalization: The benchmark range MUST match the exact same quantity, unit, geography, and time period as the candidate's estimate (e.g. daily cups vs daily cups, not daily vs annual).\n"
             "- Sensitivity Driver Identification & Precedence:\n"
-            "  1. Identify the single most volatile assumption in candidate's equation and state the explicit algebraic formula (e.g. 'E = H / R' or 'Total = Population * Penetration * Frequency * Price').\n"
-            "  2. Assign explicit variable_role: 'numerator_factor' (if multiplied in numerator), 'denominator_divisor' (if divided in denominator, e.g. replacement cycle), or 'complex_additive' / 'ambiguous'.\n"
-            "  3. Set relationship_type strictly: 'direct_multiplier', 'inverse_denominator', or 'ambiguous'. If the candidate formula contains complex multi-variable interactions, non-linear terms, or additive terms where single-variable ratio sensitivity does not hold, explicitly set relationship_type to 'ambiguous'.\n"
-            "  4. Provide baseline, low (conservative), and high (aggressive) scenario values for this driver.\n\n"
+            "  1. Identify the single most volatile assumption as sensitivity_driver (e.g. Volume/Replacement lever) and state the explicit algebraic formula (e.g. 'E = H / R' or 'Total = Population * Penetration * Frequency * Price').\n"
+            "  2. If candidate equation includes another critical assumption (e.g. Price, Ticket Size, or Frequency lever), identify it as secondary_sensitivity_driver for tornado comparison.\n"
+            "  3. Assign explicit variable_role: 'numerator_factor', 'denominator_divisor', or 'complex_additive' / 'ambiguous'.\n"
+            "  4. Set relationship_type strictly: 'direct_multiplier', 'inverse_denominator', or 'ambiguous'. If the candidate formula contains complex multi-variable interactions, non-linear terms, or additive terms where single-variable ratio sensitivity does not hold, explicitly set relationship_type to 'ambiguous'.\n"
+            "  5. Provide baseline, low (conservative), and high (aggressive) scenario values for each driver.\n\n"
             "{format_instructions}",
         ),
         (
@@ -512,17 +517,11 @@ def _validate_driver_relationship(
     )
 
 
-def _compute_deterministic_sensitivity(
+def _simulate_single_driver(
     candidate_est: Optional[CandidateEstimate],
     driver: Optional[SensitivityDriverInput],
 ) -> Dict[str, Any]:
-    """Deterministically calculate sensitivity scenarios using the 3-tier validation precedence.
-
-    Precedence Order:
-    1. Validated formula representation and explicit variable roles whenever possible.
-    2. LLM identification of formula and driver, validated before computing scenarios.
-    3. Keyword-based detection only as a fallback; if ambiguous, return 'insufficient_formula_articulation'.
-    """
+    """Deterministically simulate a single driver's scenarios with 3-tier precedence validation."""
     if not candidate_est or candidate_est.value is None or not driver or driver.baseline_value is None or driver.low_scenario_value is None or driver.high_scenario_value is None:
         return {
             "status": "unavailable",
@@ -546,7 +545,6 @@ def _compute_deterministic_sensitivity(
     is_inverse, validation_tier, validation_note = _validate_driver_relationship(driver)
 
     if is_inverse is None:
-        # Ambiguity guard: return insufficient_formula_articulation instead of generating misleading estimates
         return {
             "status": "insufficient_formula_articulation",
             "driver_name": driver.driver_name,
@@ -564,7 +562,6 @@ def _compute_deterministic_sensitivity(
     est_a = _eval_scenario(val_a)
     est_b = _eval_scenario(val_b)
 
-    # Clearly pair driver values with their resulting estimates
     est_floor = min(est_a, est_b)
     est_ceiling = max(est_a, est_b)
     impact_pct = round(abs((est_ceiling - est_floor) / (2.0 * cand_val)) * 100, 1)
@@ -598,7 +595,6 @@ def _compute_deterministic_sensitivity(
             "delta_percent": delta_ceiling_pct,
             "label": f"{driver_for_ceiling} {driver.unit} ({delta_ceiling_pct:+0.1f}%)",
         },
-        # Backward-compatible fields
         "low_driver_value": driver_for_floor,
         "high_driver_value": driver_for_ceiling,
         "low_estimate": round(est_floor, 2),
@@ -606,6 +602,95 @@ def _compute_deterministic_sensitivity(
         "impact_percent": impact_pct,
         "explanation": driver.explanation or f"Fluctuations in '{driver.driver_name}' ({val_a} to {val_b} {driver.unit}) create a ±{impact_pct}% variance swing on the final sizing result.",
     }
+
+
+def _compute_deterministic_sensitivity(
+    candidate_est: Optional[CandidateEstimate],
+    driver: Optional[SensitivityDriverInput],
+    secondary_driver: Optional[SensitivityDriverInput] = None,
+) -> Dict[str, Any]:
+    """Deterministically calculate sensitivity scenarios using 3-tier precedence and multi-driver tornado ranking.
+
+    Precedence Order:
+    1. Validated formula representation and explicit variable roles whenever possible.
+    2. LLM identification of formula and driver, validated before computing scenarios.
+    3. Keyword-based detection only as a fallback; if ambiguous, return 'insufficient_formula_articulation'.
+    """
+    primary_sim = _simulate_single_driver(candidate_est, driver)
+    if primary_sim.get("status") != "computed":
+        return primary_sim
+
+    tornado_ranking = []
+    secondary_sim = None
+    if secondary_driver and secondary_driver.baseline_value is not None:
+        sec_res = _simulate_single_driver(candidate_est, secondary_driver)
+        if sec_res.get("status") == "computed":
+            secondary_sim = sec_res
+
+    if secondary_sim:
+        # Multi-driver tornado comparison: sort descending by impact_percent
+        drivers_to_rank = [primary_sim, secondary_sim]
+        drivers_to_rank.sort(key=lambda d: d.get("impact_percent", 0), reverse=True)
+
+        top_driver = drivers_to_rank[0]
+        second_driver = drivers_to_rank[1]
+        max_impact = max(top_driver.get("impact_percent", 1.0), 0.1)
+        ratio = round(top_driver.get("impact_percent", 1.0) / max(second_driver.get("impact_percent", 1.0), 0.1), 1)
+
+        for idx, d in enumerate(drivers_to_rank):
+            role_kw = d["driver_name"].lower()
+            if any(k in role_kw for k in ["cycle", "replacement", "population", "pool", "penetration", "adoption", "volume"]):
+                role_label = "Volume / Market Sizing Lever"
+            elif any(k in role_kw for k in ["price", "ticket", "cost", "fee", "revenue", "spend", "aov"]):
+                role_label = "Unit Economics / Price Lever"
+            else:
+                role_label = "Usage / Frequency Lever"
+
+            tornado_ranking.append({
+                "rank": idx + 1,
+                "driver_name": d["driver_name"],
+                "role_label": role_label,
+                "impact_percent": d["impact_percent"],
+                "relationship_type": d["relationship_type"],
+                "is_inverse_relationship": d["is_inverse_relationship"],
+                "baseline_driver_value": d["baseline_driver_value"],
+                "driver_unit": d["driver_unit"],
+                "conservative_scenario": d["conservative_scenario"],
+                "aggressive_scenario": d["aggressive_scenario"],
+                "relative_bar_percent": 100.0 if idx == 0 else round((d["impact_percent"] / max_impact) * 100, 1),
+                "explanation": d["explanation"],
+            })
+
+        result = dict(top_driver)
+        result["has_multi_driver_comparison"] = True
+        result["leverage_ratio"] = ratio
+        result["tornado_ranking"] = tornado_ranking
+        result["multi_driver_guidance"] = (
+            f"Tornado Sensitivity: '{top_driver['driver_name']}' exerts {ratio}x more leverage (±{top_driver['impact_percent']}%) "
+            f"than '{second_driver['driver_name']}' (±{second_driver['impact_percent']}%). In management consulting interviews, defend the #{1} driver first with defensible macro proxies."
+        )
+        return result
+    else:
+        d = primary_sim
+        tornado_ranking.append({
+            "rank": 1,
+            "driver_name": d["driver_name"],
+            "role_label": "Primary Leverage Lever",
+            "impact_percent": d["impact_percent"],
+            "relationship_type": d["relationship_type"],
+            "is_inverse_relationship": d["is_inverse_relationship"],
+            "baseline_driver_value": d["baseline_driver_value"],
+            "driver_unit": d["driver_unit"],
+            "conservative_scenario": d["conservative_scenario"],
+            "aggressive_scenario": d["aggressive_scenario"],
+            "relative_bar_percent": 100.0,
+            "explanation": d["explanation"],
+        })
+        result = dict(primary_sim)
+        result["has_multi_driver_comparison"] = False
+        result["leverage_ratio"] = 1.0
+        result["tornado_ranking"] = tornado_ranking
+        return result
 
 
 async def evaluate_guesstimate(
@@ -750,12 +835,14 @@ async def evaluate_guesstimate(
         # Refinement 3: Deterministic Range Comparison Engine
         range_diag = _compute_deterministic_range_diagnostic(cand_est, plaus_rng)
 
-        # Parse sensitivity driver
+        # Parse sensitivity drivers
         driver_dict = result.get("sensitivity_driver")
+        secondary_dict = result.get("secondary_sensitivity_driver")
         driver_obj = SensitivityDriverInput(**driver_dict) if isinstance(driver_dict, dict) else None
+        secondary_obj = SensitivityDriverInput(**secondary_dict) if isinstance(secondary_dict, dict) else None
 
-        # Refinement 4: Deterministic Sensitivity Calculation Engine (direction-aware)
-        sensitivity_diag = _compute_deterministic_sensitivity(cand_est, driver_obj)
+        # Refinement 4: Deterministic Sensitivity Calculation Engine (direction-aware & tornado comparison)
+        sensitivity_diag = _compute_deterministic_sensitivity(cand_est, driver_obj, secondary_obj)
 
         # Candidate branch diagnostics
         branch_diags = result.get("candidate_branch_diagnostics") or default_fallback["candidate_branch_diagnostics"]

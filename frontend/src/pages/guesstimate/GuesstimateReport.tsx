@@ -95,14 +95,22 @@ export default function GuesstimateReport() {
 
   return (
     <div className="relative w-full overflow-hidden px-4 sm:px-8 py-8 sm:py-10 max-w-7xl mx-auto flex flex-col gap-8 print:p-0 print:max-w-none print:text-black">
-      {/* Print Stylesheet */}
+      {/* Print Stylesheet for Placement Cells */}
       <style>{`
         @media print {
+          @page {
+            size: A4;
+            margin: 12mm 15mm;
+          }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
           body {
             background: white !important;
             color: #111 !important;
           }
-          nav, aside, header, .no-print, audio, button {
+          nav, aside, header, .no-print, audio, button, .print\\:hidden {
             display: none !important;
           }
           .print\\:break-inside-avoid {
@@ -111,6 +119,24 @@ export default function GuesstimateReport() {
           }
         }
       `}</style>
+
+      {/* Formal Recruiter / Placement Cell Dossier Header (Print-Only) */}
+      <div className="hidden print:block mb-4 p-4 border-b-2 border-black/40">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500">
+              SpeakFlow Campus Placement Analytics
+            </span>
+            <h1 className="text-xl font-bold text-black tracking-tight mt-0.5">Management Consulting Sizing Dossier</h1>
+            <p className="text-xs text-gray-600">Round 3: Guesstimate &amp; Market Sizing — Multi-Rubric Candidate Evaluation</p>
+          </div>
+          <div className="text-right text-xs text-gray-700 font-mono">
+            <div>Session Ref: #{sessionId}</div>
+            <div>Evaluation Date: {data.created_at ? new Date(data.created_at).toLocaleDateString() : new Date().toLocaleDateString()}</div>
+            <div className="font-bold text-black mt-1">Placement Tier: {verdict.text}</div>
+          </div>
+        </div>
+      </div>
 
       {/* Ambient Backdrop Aura */}
       <div className="pointer-events-none absolute -top-40 right-1/4 w-[700px] h-[400px] bg-tertiary/10 rounded-full blur-[140px] print:hidden" />
@@ -548,11 +574,14 @@ export default function GuesstimateReport() {
         </div>
       </div>
 
-      {/* Priority 4: Deterministic Sensitivity Simulation Panel */}
+      {/* Priority 4: Deterministic Sensitivity Simulation & Tornado Ranking Panel */}
       {(() => {
         const sensitivity = evaluation?.sensitivity_analysis;
+        const ranking = sensitivity?.tornado_ranking || [];
+        const hasTornado = ranking.length > 1;
+
         return (
-          <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-4 shadow-md print:break-inside-avoid print:border-black/20">
+          <div className="p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-5 shadow-md print:break-inside-avoid print:border-black/20">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-amber-400/10 text-amber-400 flex items-center justify-center">
@@ -560,23 +589,70 @@ export default function GuesstimateReport() {
                 </div>
                 <div>
                   <h3 className="font-headline-sm text-base font-bold text-on-surface">
-                    Deterministic Sensitivity Analysis &amp; Leverage Drivers
+                    {hasTornado ? "Deterministic Sensitivity Analysis & Tornado Ranking" : "Deterministic Sensitivity Analysis & Leverage Drivers"}
                   </h3>
                   <span className="text-xs text-outline">
-                    Measures which equation variable most impacts the final sizing estimation.
+                    {hasTornado
+                      ? "Ranks candidate assumptions by estimation volatility to prioritize interview defense."
+                      : "Measures which equation variable most impacts the final sizing estimation."}
                   </span>
                 </div>
               </div>
 
               {sensitivity?.impact_percent != null && (
                 <span className="self-start sm:self-center px-3 py-1 rounded-full text-xs font-bold border border-amber-400/30 bg-amber-400/15 text-amber-400">
-                  ±{sensitivity.impact_percent}% Estimation Volatility
+                  ±{sensitivity.impact_percent}% Peak Estimation Volatility
                 </span>
               )}
             </div>
 
             {sensitivity?.status === "computed" ? (
               <div className="space-y-4">
+                {/* Tornado Comparison Bar Chart (when 2+ drivers available) */}
+                {hasTornado && (
+                  <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/30 flex flex-col gap-3">
+                    <span className="font-label-caps text-[10px] uppercase text-outline font-bold tracking-wider">
+                      Assumption Volatility Ranking (Mini Tornado Comparison)
+                    </span>
+
+                    <div className="space-y-3">
+                      {ranking.map((item, idx) => (
+                        <div key={idx} className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${idx === 0 ? "bg-amber-400/20 text-amber-400 border border-amber-400/30" : "bg-surface-container-high text-outline border border-outline-variant/30"}`}>
+                                #{item.rank} {item.role_label}
+                              </span>
+                              <strong className="text-on-surface">{item.driver_name}</strong>
+                              <span className="text-[11px] text-outline font-mono">
+                                ({item.baseline_driver_value} {item.driver_unit} baseline)
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold text-amber-400">
+                              ±{item.impact_percent}% swing
+                            </span>
+                          </div>
+
+                          {/* Relative Volatility Bar */}
+                          <div className="w-full h-2 rounded-full bg-surface-container-high overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${idx === 0 ? "bg-gradient-to-r from-amber-500 to-amber-300" : "bg-gradient-to-r from-sky-500/70 to-sky-300/70"}`}
+                              style={{ width: `${Math.max(15, item.relative_bar_percent)}%` }}
+                            />
+                          </div>
+
+                          {/* Scenario Mini Summary */}
+                          <div className="flex items-center justify-between text-[11px] text-outline font-mono pt-0.5">
+                            <span>Floor: {item.conservative_scenario?.label} ({item.conservative_scenario?.resulting_estimate?.toLocaleString()})</span>
+                            <span>Ceiling: {item.aggressive_scenario?.label} ({item.aggressive_scenario?.resulting_estimate?.toLocaleString()})</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Scenario Cards (Conservative Floor, Candidate Baseline, Aggressive Ceiling) */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                   {/* Conservative Scenario */}
                   <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/20 flex flex-col justify-between">
@@ -612,11 +688,14 @@ export default function GuesstimateReport() {
                   </div>
                 </div>
 
+                {/* Consulting Defense Guidance Advice */}
                 <div className="p-3.5 rounded-xl bg-surface-container/60 border border-outline-variant/20 text-xs text-on-surface-variant flex items-start gap-2">
                   <span className="material-symbols-outlined text-amber-400 text-[18px] shrink-0 mt-0.5">lightbulb</span>
                   <div>
                     <strong className="text-on-surface block mb-0.5 font-semibold">Consulting Interview Defense Advice:</strong>
-                    <p className="leading-relaxed">{sensitivity.explanation}</p>
+                    <p className="leading-relaxed">
+                      {sensitivity.multi_driver_guidance || sensitivity.explanation}
+                    </p>
                   </div>
                 </div>
               </div>

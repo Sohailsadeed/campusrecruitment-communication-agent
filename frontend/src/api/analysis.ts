@@ -115,6 +115,28 @@ export interface BranchEvidence {
   evidence_rationale: string;
 }
 
+export interface SensitivityScenario {
+  driver_value: number;
+  resulting_estimate: number;
+  delta_percent: number;
+  label: string;
+}
+
+export interface TornadoRankingItem {
+  rank: number;
+  driver_name: string;
+  role_label: string;
+  impact_percent: number;
+  relationship_type: string;
+  is_inverse_relationship: boolean;
+  baseline_driver_value: number;
+  driver_unit: string;
+  conservative_scenario: SensitivityScenario;
+  aggressive_scenario: SensitivityScenario;
+  relative_bar_percent: number;
+  explanation?: string;
+}
+
 export interface SensitivityAnalysis {
   status: "computed" | "unavailable" | "insufficient_formula_articulation";
   driver_name: string;
@@ -127,6 +149,12 @@ export interface SensitivityAnalysis {
   low_estimate?: number;
   high_estimate?: number;
   impact_percent?: number;
+  conservative_scenario?: SensitivityScenario;
+  aggressive_scenario?: SensitivityScenario;
+  has_multi_driver_comparison?: boolean;
+  leverage_ratio?: number;
+  multi_driver_guidance?: string;
+  tornado_ranking?: TornadoRankingItem[];
   explanation: string;
 }
 

@@ -1,5 +1,7 @@
 """Guesstimate interview evaluation service using OpenRouter Nemotron / Ollama fallback."""
 import logging
+import math
+import re
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
@@ -89,11 +91,19 @@ class SensitivityDriverInput(BaseModel):
     low_scenario_value: Optional[float] = Field(default=None, description="Conservative / alternative scenario value (e.g. 0.15)")
     high_scenario_value: Optional[float] = Field(default=None, description="Aggressive / alternative scenario value (e.g. 0.35)")
     unit: str = Field(default="ratio", description="Unit of the driver variable (e.g. %, years, frequency, dollars)")
+    relationship_type: str = Field(
+        default="direct_multiplier",
+        description="Must be strictly one of: 'direct_multiplier' (variable is a numerator term, e.g. population, price, adoption rate, replacement rate), 'inverse_denominator' (variable is in denominator, e.g. replacement cycle in years, turnaround time, unit capacity per worker), or 'ambiguous' (non-linear, additive offset, or multi-variable interplay)"
+    )
+    variable_role: str = Field(
+        default="numerator_factor",
+        description="Explicit algebraic position: 'numerator_factor' (variable multiplied in numerator), 'denominator_divisor' (variable divided in denominator), or 'complex_additive' / 'ambiguous'"
+    )
     is_inverse_relationship: bool = Field(
         default=False,
-        description="Set to true if increasing this variable decreases the final estimate (e.g. replacement cycle in denominator: E = H / Replacement_Years), false for direct multipliers"
+        description="Boolean helper: True if inverse_denominator, False if direct_multiplier"
     )
-    formula_expression: str = Field(default="", description="Identified formula (e.g. Total = Population * Penetration * Frequency * Price)")
+    formula_expression: str = Field(default="", description="Identified formula (e.g. Total = Population * Penetration * Frequency * Price or E = H / R)")
     explanation: str = Field(default="", description="Why this variable carries the highest sensitivity to estimation variance")
 
 
@@ -221,7 +231,11 @@ _guesstimate_prompt = ChatPromptTemplate.from_messages(
             "CONSULTING DIAGNOSTIC REQUIREMENTS:\n"
             "- Candidate Tree Evidence: Classify candidate branches as 'supported_mece', 'confirmed_overlap', 'omitted_segment', 'unsupported_proxy', or 'unclear_evidence'. If the candidate did not state a branch clearly enough, classify as 'unclear_evidence' rather than making unsupported assumptions.\n"
             "- Unit & Period Normalization: The benchmark range MUST match the exact same quantity, unit, geography, and time period as the candidate's estimate (e.g. daily cups vs daily cups, not daily vs annual).\n"
-            "- Sensitivity Driver: Identify the single most volatile assumption in candidate's equation and specify realistic baseline, low, and high values. If the variable is in the denominator (e.g. replacement cycle in years), set is_inverse_relationship to true.\n\n"
+            "- Sensitivity Driver Identification & Precedence:\n"
+            "  1. Identify the single most volatile assumption in candidate's equation and state the explicit algebraic formula (e.g. 'E = H / R' or 'Total = Population * Penetration * Frequency * Price').\n"
+            "  2. Assign explicit variable_role: 'numerator_factor' (if multiplied in numerator), 'denominator_divisor' (if divided in denominator, e.g. replacement cycle), or 'complex_additive' / 'ambiguous'.\n"
+            "  3. Set relationship_type strictly: 'direct_multiplier', 'inverse_denominator', or 'ambiguous'. If the candidate formula contains complex multi-variable interactions, non-linear terms, or additive terms where single-variable ratio sensitivity does not hold, explicitly set relationship_type to 'ambiguous'.\n"
+            "  4. Provide baseline, low (conservative), and high (aggressive) scenario values for this driver.\n\n"
             "{format_instructions}",
         ),
         (
@@ -329,11 +343,186 @@ def _compute_deterministic_range_diagnostic(
         }
 
 
+def _validate_driver_relationship(
+    driver: SensitivityDriverInput,
+) -> tuple[Optional[bool], str, str]:
+    """Validate mathematical relationship using 3-tier precedence.
+
+    Returns:
+        (is_inverse, validation_tier, explanation)
+        where is_inverse is:
+          - True: inverse relationship (driver in denominator divisor, E = K / D)
+          - False: direct multiplier relationship (driver in numerator factor, E = K * D)
+          - None: ambiguous, complex, non-linear, or insufficiently articulated
+    """
+    rel_type = (getattr(driver, "relationship_type", None) or "").strip().lower()
+    var_role = (getattr(driver, "variable_role", None) or "").strip().lower()
+    expr = (getattr(driver, "formula_expression", None) or "").strip()
+    driver_name = driver.driver_name.strip()
+
+    # Pre-check: If LLM or schema explicitly flags ambiguity, respect immediately
+    if rel_type in ["ambiguous", "complex", "non_linear", "unclear"] or var_role in ["complex_additive", "ambiguous", "unclear"]:
+        return (
+            None,
+            "explicit_ambiguity",
+            f"Driver '{driver_name}' was identified with an ambiguous, complex, or non-linear relationship in candidate reasoning.",
+        )
+
+    # Clean formula expression: replace unicode math operators
+    expr_clean = expr.replace("×", "*").replace("÷", "/").replace("−", "-")
+
+    # -----------------------------------------------------------------
+    # PRECEDENCE 1: Validated formula representation & explicit variable roles
+    # -----------------------------------------------------------------
+    if expr_clean:
+        # Check for additive/subtractive offsets: e.g. "A + B", "Total = (A + B) / C", "A * B + C"
+        has_additive_terms = bool(re.search(r'(?<=\s)[+\-](?=\s)|[+]', expr_clean))
+
+        if "/" in expr_clean:
+            # Division formula: e.g. E = H / R or Total = (Pool * Penetration) / Cycle
+            if has_additive_terms:
+                return (
+                    None,
+                    "complex_formula",
+                    f"Formula '{expr}' contains additive terms and multi-variable shifts; holding other variables constant does not scale proportionally.",
+                )
+
+            parts = expr_clean.split("/", 1)
+            num_part = parts[0].lower()
+            denom_part = parts[1].lower()
+
+            num_clean = re.sub(r'[^a-zA-Z0-9_]', ' ', num_part).lower()
+            denom_clean = re.sub(r'[^a-zA-Z0-9_]', ' ', denom_part).lower()
+            driver_norm = re.sub(r'[^a-zA-Z0-9_]', ' ', driver_name).lower()
+            driver_tokens = [t for t in driver_norm.split() if len(t) > 1 or t.isalpha()]
+
+            # Step 1: Full phrase matching
+            in_denom = driver_norm in denom_clean
+            in_num = driver_norm in num_clean
+
+            # Step 2: Core driver token matching (filtering demographic pool prefixes like "households", "population")
+            if not in_denom and not in_num:
+                core_driver_tokens = [
+                    t for t in driver_tokens
+                    if t not in ["market", "target", "household", "households", "population", "user", "users", "customer", "customers", "total", "pool"]
+                ]
+                if not core_driver_tokens:
+                    core_driver_tokens = driver_tokens
+
+                in_denom = any(t in denom_clean.split() for t in core_driver_tokens)
+                in_num = any(t in num_clean.split() for t in core_driver_tokens)
+
+            # Step 3: Explicit variable role and relationship type validation
+            if var_role == "denominator_divisor" or rel_type == "inverse_denominator":
+                if in_denom or not in_num:
+                    in_denom = True
+                    in_num = False
+            elif var_role == "numerator_factor" or rel_type == "direct_multiplier":
+                if in_num or not in_denom:
+                    in_num = True
+                    in_denom = False
+
+            if in_denom and not in_num:
+                return (
+                    True,
+                    "validated_formula",
+                    f"Validated inverse relationship: '{driver_name}' is isolated in the denominator divisor of '{expr}'.",
+                )
+            elif in_num and not in_denom:
+                return (
+                    False,
+                    "validated_formula",
+                    f"Validated direct relationship: '{driver_name}' is in the numerator of '{expr}'.",
+                )
+            elif in_denom and in_num:
+                return (
+                    None,
+                    "complex_formula",
+                    f"Driver '{driver_name}' appears on both sides of division in '{expr}'; relationship is non-linear.",
+                )
+
+        elif "*" in expr_clean and "/" not in expr_clean:
+            # Purely multiplicative formula
+            if has_additive_terms:
+                return (
+                    None,
+                    "complex_formula",
+                    f"Formula '{expr}' combines multiplication with additive offsets; single-variable sensitivity cannot be linearly isolated.",
+                )
+
+            # In a pure product A * B * C, holding other factors constant is strictly direct multiplier
+            if var_role == "denominator_divisor" or rel_type == "inverse_denominator":
+                logger.warning("Formula representation override: marked inverse but expression '%s' is purely multiplicative", expr)
+                return (
+                    False,
+                    "validated_formula",
+                    f"Formula '{expr}' is purely multiplicative with no divisor; validated as direct multiplier.",
+                )
+            else:
+                return (
+                    False,
+                    "validated_formula",
+                    f"Validated direct relationship: formula '{expr}' is a pure product model.",
+                )
+
+    # -----------------------------------------------------------------
+    # PRECEDENCE 2: LLM Candidate Identification with Cross-Validation
+    # -----------------------------------------------------------------
+    # When formula syntax is non-algebraic or descriptive, rely on explicit roles if consistent
+    if var_role == "denominator_divisor" or rel_type == "inverse_denominator":
+        if bool(driver.is_inverse_relationship) or var_role == "denominator_divisor":
+            return (
+                True,
+                "llm_role_validated",
+                f"LLM identified explicit denominator divisor role for '{driver_name}'.",
+            )
+    elif var_role == "numerator_factor" or rel_type == "direct_multiplier":
+        if not bool(driver.is_inverse_relationship) or var_role == "numerator_factor":
+            return (
+                False,
+                "llm_role_validated",
+                f"LLM identified explicit numerator factor role for '{driver_name}'.",
+            )
+
+    # -----------------------------------------------------------------
+    # PRECEDENCE 3: Keyword Heuristics as Fallback ONLY, with Strict Ambiguity Guard
+    # -----------------------------------------------------------------
+    text_corpus = f"{expr_clean} {driver_name.lower()} {getattr(driver, 'explanation', '')}".lower()
+    has_explicit_division_kw = any(kw in text_corpus for kw in ["divided by", "per cycle", "turnaround time", "replacement cycle", "divided across"])
+    has_explicit_multiplier_kw = any(kw in text_corpus for kw in ["multiplied by", "penetration rate", "adoption rate", "frequency per", "times per"])
+
+    if has_explicit_division_kw and not has_explicit_multiplier_kw and bool(driver.is_inverse_relationship):
+        return (
+            True,
+            "keyword_fallback",
+            "Inferred inverse relationship from explicit division/cycle terminology as fallback.",
+        )
+    elif has_explicit_multiplier_kw and not has_explicit_division_kw and not bool(driver.is_inverse_relationship):
+        return (
+            False,
+            "keyword_fallback",
+            "Inferred direct multiplier relationship from rate/penetration terminology as fallback.",
+        )
+
+    # Ambiguous: DO NOT GUESS OR GENERATE POTENTIALLY MISLEADING ESTIMATES
+    return (
+        None,
+        "ambiguous",
+        f"Mathematical relationship for '{driver_name}' could not be validated; deterministic simulation held to avoid misleading estimates.",
+    )
+
+
 def _compute_deterministic_sensitivity(
     candidate_est: Optional[CandidateEstimate],
     driver: Optional[SensitivityDriverInput],
 ) -> Dict[str, Any]:
-    """Deterministically calculate sensitivity scenarios accounting for direct vs. inverse formula relationships."""
+    """Deterministically calculate sensitivity scenarios using the 3-tier validation precedence.
+
+    Precedence Order:
+    1. Validated formula representation and explicit variable roles whenever possible.
+    2. LLM identification of formula and driver, validated before computing scenarios.
+    3. Keyword-based detection only as a fallback; if ambiguous, return 'insufficient_formula_articulation'.
+    """
     if not candidate_est or candidate_est.value is None or not driver or driver.baseline_value is None or driver.low_scenario_value is None or driver.high_scenario_value is None:
         return {
             "status": "unavailable",
@@ -354,13 +543,19 @@ def _compute_deterministic_sensitivity(
     val_a = driver.low_scenario_value
     val_b = driver.high_scenario_value
 
-    # Check if driver has an inverse relationship (e.g. replacement cycle in denominator)
-    is_inverse = bool(driver.is_inverse_relationship)
-    expr_lower = (driver.formula_expression or "").lower()
-    if not is_inverse and any(k in expr_lower for k in ["/ replacement", "1 /", "1/", "/ cycle", "denominator", "turnaround"]):
-        is_inverse = True
+    is_inverse, validation_tier, validation_note = _validate_driver_relationship(driver)
 
-    # Calculate estimate for each driver value
+    if is_inverse is None:
+        # Ambiguity guard: return insufficient_formula_articulation instead of generating misleading estimates
+        return {
+            "status": "insufficient_formula_articulation",
+            "driver_name": driver.driver_name,
+            "formula_expression": driver.formula_expression or "Ambiguous / Multi-variable Model",
+            "validation_tier": validation_tier,
+            "explanation": validation_note,
+        }
+
+    # Deterministic scenario computation
     def _eval_scenario(d_val: float) -> float:
         if abs(d_val) < 1e-9:
             return 0.0
@@ -385,6 +580,8 @@ def _compute_deterministic_sensitivity(
         "driver_name": driver.driver_name,
         "is_inverse_relationship": is_inverse,
         "relationship_type": "inverse (denominator)" if is_inverse else "direct (multiplier)",
+        "validation_tier": validation_tier,
+        "validation_note": validation_note,
         "formula_expression": driver.formula_expression or ("Direct Multiplier Model" if not is_inverse else "Inverse Denominator Model"),
         "baseline_driver_value": base_val,
         "driver_unit": driver.unit or "units",
@@ -393,13 +590,13 @@ def _compute_deterministic_sensitivity(
             "driver_value": driver_for_floor,
             "resulting_estimate": round(est_floor, 2),
             "delta_percent": delta_floor_pct,
-            "label": f"{driver_for_floor} {driver.unit} ({delta_floor_pct:+0.1f}%)"
+            "label": f"{driver_for_floor} {driver.unit} ({delta_floor_pct:+0.1f}%)",
         },
         "aggressive_scenario": {
             "driver_value": driver_for_ceiling,
             "resulting_estimate": round(est_ceiling, 2),
             "delta_percent": delta_ceiling_pct,
-            "label": f"{driver_for_ceiling} {driver.unit} ({delta_ceiling_pct:+0.1f}%)"
+            "label": f"{driver_for_ceiling} {driver.unit} ({delta_ceiling_pct:+0.1f}%)",
         },
         # Backward-compatible fields
         "low_driver_value": driver_for_floor,

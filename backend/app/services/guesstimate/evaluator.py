@@ -86,14 +86,22 @@ class BranchEvidence(BaseModel):
 class SensitivityDriverInput(BaseModel):
     driver_name: str = Field(default="Primary Adoption / Penetration Rate", description="Name of the highest-leverage variable in candidate's equation")
     baseline_value: Optional[float] = Field(default=None, description="The baseline numerical value used in candidate calculation (e.g. 0.25)")
-    low_scenario_value: Optional[float] = Field(default=None, description="Conservative / pessimistic scenario value (e.g. 0.15)")
-    high_scenario_value: Optional[float] = Field(default=None, description="Aggressive / optimistic scenario value (e.g. 0.35)")
+    low_scenario_value: Optional[float] = Field(default=None, description="Conservative / alternative scenario value (e.g. 0.15)")
+    high_scenario_value: Optional[float] = Field(default=None, description="Aggressive / alternative scenario value (e.g. 0.35)")
     unit: str = Field(default="ratio", description="Unit of the driver variable (e.g. %, years, frequency, dollars)")
+    is_inverse_relationship: bool = Field(
+        default=False,
+        description="Set to true if increasing this variable decreases the final estimate (e.g. replacement cycle in denominator: E = H / Replacement_Years), false for direct multipliers"
+    )
     formula_expression: str = Field(default="", description="Identified formula (e.g. Total = Population * Penetration * Frequency * Price)")
     explanation: str = Field(default="", description="Why this variable carries the highest sensitivity to estimation variance")
 
 
 class GuesstimateEvaluationSchema(BaseModel):
+    evaluation_version: int = Field(
+        default=2,
+        description="Schema contract version",
+    )
     overall_score: int = Field(
         default=75,
         description="Overall interview evaluation score from 0 to 100 (will be deterministically calibrated by backend)",
@@ -213,7 +221,7 @@ _guesstimate_prompt = ChatPromptTemplate.from_messages(
             "CONSULTING DIAGNOSTIC REQUIREMENTS:\n"
             "- Candidate Tree Evidence: Classify candidate branches as 'supported_mece', 'confirmed_overlap', 'omitted_segment', 'unsupported_proxy', or 'unclear_evidence'. If the candidate did not state a branch clearly enough, classify as 'unclear_evidence' rather than making unsupported assumptions.\n"
             "- Unit & Period Normalization: The benchmark range MUST match the exact same quantity, unit, geography, and time period as the candidate's estimate (e.g. daily cups vs daily cups, not daily vs annual).\n"
-            "- Sensitivity Driver: Identify the single most volatile assumption in candidate's equation and specify realistic baseline, low, and high values.\n\n"
+            "- Sensitivity Driver: Identify the single most volatile assumption in candidate's equation and specify realistic baseline, low, and high values. If the variable is in the denominator (e.g. replacement cycle in years), set is_inverse_relationship to true.\n\n"
             "{format_instructions}",
         ),
         (
@@ -230,16 +238,24 @@ _guesstimate_prompt = ChatPromptTemplate.from_messages(
 )
 
 
+def _round_half_up(val: float) -> int:
+    """Conventional arithmetic half-up rounding (e.g. 82.5 -> 83)."""
+    import math
+    return math.floor(val + 0.5) if val >= 0 else math.ceil(val - 0.5)
+
+
 def _compute_deterministic_range_diagnostic(
     candidate_est: Optional[CandidateEstimate],
     plausible_rng: Optional[PlausibleRange],
 ) -> Dict[str, Any]:
-    """Deterministically compare candidate estimate against plausible benchmark range."""
+    """Deterministically compare candidate estimate against plausible benchmark range with documented baseline."""
     if not candidate_est or candidate_est.value is None or not plausible_rng or plausible_rng.min is None or plausible_rng.max is None:
         return {
             "status": "unavailable",
             "is_within_range": None,
             "variance_percent": None,
+            "variance_reference": "range_midpoint",
+            "range_midpoint": None,
             "unit_match": True,
             "summary_label": "Benchmark Range Pending",
             "diagnostic_note": "A numerical candidate estimate or benchmark range was not sufficiently specified for automated reality comparison.",
@@ -256,6 +272,8 @@ def _compute_deterministic_range_diagnostic(
             "status": "unit_mismatch",
             "is_within_range": None,
             "variance_percent": None,
+            "variance_reference": "range_midpoint",
+            "range_midpoint": None,
             "unit_match": False,
             "summary_label": "Unit / Timeframe Mismatch",
             "diagnostic_note": f"Candidate estimated in '{candidate_est.unit}/{candidate_est.period}', while benchmark range is in '{plausible_rng.unit}/{plausible_rng.period}'. Comparison held to avoid invalid calculation.",
@@ -266,34 +284,47 @@ def _compute_deterministic_range_diagnostic(
     max_val = max(plausible_rng.min, plausible_rng.max)
     midpoint = (min_val + max_val) / 2.0 if (min_val + max_val) > 0 else 1.0
 
+    # Documented definition:
+    # variance_percent measures the percentage displacement of the candidate's estimate
+    # relative to the benchmark range midpoint: ((candidate_estimate - midpoint) / midpoint) * 100
+    variance_from_mid = round(((cand_val - midpoint) / midpoint) * 100, 1)
+
     if cand_val < min_val:
         pct_under = round(((min_val - cand_val) / midpoint) * 100, 1)
         return {
             "status": "below_range",
             "is_within_range": False,
-            "variance_percent": -pct_under,
+            "variance_percent": variance_from_mid,
+            "variance_reference": "range_midpoint",
+            "range_midpoint": round(midpoint, 2),
+            "variance_formula": "((candidate_estimate - range_midpoint) / range_midpoint) * 100",
             "unit_match": True,
-            "summary_label": f"Below Realistic Band (-{pct_under}%)",
-            "diagnostic_note": "Candidate estimate falls below plausible industry bounds. Check for omitted demographic segments or overly conservative proxies.",
+            "summary_label": f"Below Realistic Band ({variance_from_mid}%)",
+            "diagnostic_note": f"Candidate estimate falls below plausible industry bounds by {pct_under}% from the lower floor. Check for omitted demographic segments or overly conservative proxies.",
         }
     elif cand_val > max_val:
         pct_over = round(((cand_val - max_val) / midpoint) * 100, 1)
         return {
             "status": "above_range",
             "is_within_range": False,
-            "variance_percent": pct_over,
+            "variance_percent": variance_from_mid,
+            "variance_reference": "range_midpoint",
+            "range_midpoint": round(midpoint, 2),
+            "variance_formula": "((candidate_estimate - range_midpoint) / range_midpoint) * 100",
             "unit_match": True,
-            "summary_label": f"Above Realistic Band (+{pct_over}%)",
-            "diagnostic_note": "Candidate estimate exceeds plausible industry bounds. Check for double-counting, unrealistic penetration, or compounding math errors.",
+            "summary_label": f"Above Realistic Band (+{variance_from_mid}%)",
+            "diagnostic_note": f"Candidate estimate exceeds plausible industry bounds by +{pct_over}% above the upper ceiling. Check for double-counting, unrealistic penetration, or compounding math errors.",
         }
     else:
-        variance_from_mid = round(((cand_val - midpoint) / midpoint) * 100, 1)
         return {
             "status": "within_range",
             "is_within_range": True,
             "variance_percent": variance_from_mid,
+            "variance_reference": "range_midpoint",
+            "range_midpoint": round(midpoint, 2),
+            "variance_formula": "((candidate_estimate - range_midpoint) / range_midpoint) * 100",
             "unit_match": True,
-            "summary_label": "Within Plausible Consulting Band",
+            "summary_label": f"Within Plausible Band ({variance_from_mid:+0.1f}% from midpoint)",
             "diagnostic_note": "Candidate final estimate lands inside the plausible industry range. (Note: Being inside the range demonstrates numerical sanity, but must be accompanied by MECE structure to verify sound methodology).",
         }
 
@@ -302,7 +333,7 @@ def _compute_deterministic_sensitivity(
     candidate_est: Optional[CandidateEstimate],
     driver: Optional[SensitivityDriverInput],
 ) -> Dict[str, Any]:
-    """Deterministically calculate low/high sensitivity swings on candidate's estimate."""
+    """Deterministically calculate sensitivity scenarios accounting for direct vs. inverse formula relationships."""
     if not candidate_est or candidate_est.value is None or not driver or driver.baseline_value is None or driver.low_scenario_value is None or driver.high_scenario_value is None:
         return {
             "status": "unavailable",
@@ -320,26 +351,63 @@ def _compute_deterministic_sensitivity(
             "explanation": "Baseline driver value is zero, preventing ratio-based sensitivity modeling.",
         }
 
-    low_val = driver.low_scenario_value
-    high_val = driver.high_scenario_value
+    val_a = driver.low_scenario_value
+    val_b = driver.high_scenario_value
 
-    low_est = cand_val * (low_val / base_val)
-    high_est = cand_val * (high_val / base_val)
-    impact_pct = round(abs((high_est - low_est) / (2.0 * cand_val)) * 100, 1)
+    # Check if driver has an inverse relationship (e.g. replacement cycle in denominator)
+    is_inverse = bool(driver.is_inverse_relationship)
+    expr_lower = (driver.formula_expression or "").lower()
+    if not is_inverse and any(k in expr_lower for k in ["/ replacement", "1 /", "1/", "/ cycle", "denominator", "turnaround"]):
+        is_inverse = True
+
+    # Calculate estimate for each driver value
+    def _eval_scenario(d_val: float) -> float:
+        if abs(d_val) < 1e-9:
+            return 0.0
+        return cand_val * (base_val / d_val) if is_inverse else cand_val * (d_val / base_val)
+
+    est_a = _eval_scenario(val_a)
+    est_b = _eval_scenario(val_b)
+
+    # Clearly pair driver values with their resulting estimates
+    est_floor = min(est_a, est_b)
+    est_ceiling = max(est_a, est_b)
+    impact_pct = round(abs((est_ceiling - est_floor) / (2.0 * cand_val)) * 100, 1)
+
+    driver_for_floor = val_a if est_a <= est_b else val_b
+    driver_for_ceiling = val_b if est_b >= est_a else val_a
+
+    delta_floor_pct = round(((est_floor - cand_val) / cand_val) * 100, 1)
+    delta_ceiling_pct = round(((est_ceiling - cand_val) / cand_val) * 100, 1)
 
     return {
         "status": "computed",
         "driver_name": driver.driver_name,
-        "formula_expression": driver.formula_expression or "Multiplicative Estimation Model",
+        "is_inverse_relationship": is_inverse,
+        "relationship_type": "inverse (denominator)" if is_inverse else "direct (multiplier)",
+        "formula_expression": driver.formula_expression or ("Direct Multiplier Model" if not is_inverse else "Inverse Denominator Model"),
         "baseline_driver_value": base_val,
-        "low_driver_value": low_val,
-        "high_driver_value": high_val,
         "driver_unit": driver.unit or "units",
         "baseline_estimate": round(cand_val, 2),
-        "low_estimate": round(low_est, 2),
-        "high_estimate": round(high_est, 2),
+        "conservative_scenario": {
+            "driver_value": driver_for_floor,
+            "resulting_estimate": round(est_floor, 2),
+            "delta_percent": delta_floor_pct,
+            "label": f"{driver_for_floor} {driver.unit} ({delta_floor_pct:+0.1f}%)"
+        },
+        "aggressive_scenario": {
+            "driver_value": driver_for_ceiling,
+            "resulting_estimate": round(est_ceiling, 2),
+            "delta_percent": delta_ceiling_pct,
+            "label": f"{driver_for_ceiling} {driver.unit} ({delta_ceiling_pct:+0.1f}%)"
+        },
+        # Backward-compatible fields
+        "low_driver_value": driver_for_floor,
+        "high_driver_value": driver_for_ceiling,
+        "low_estimate": round(est_floor, 2),
+        "high_estimate": round(est_ceiling, 2),
         "impact_percent": impact_pct,
-        "explanation": driver.explanation or f"Fluctuations in '{driver.driver_name}' create a ±{impact_pct}% variance swing on the final sizing result.",
+        "explanation": driver.explanation or f"Fluctuations in '{driver.driver_name}' ({val_a} to {val_b} {driver.unit}) create a ±{impact_pct}% variance swing on the final sizing result.",
     }
 
 
@@ -468,16 +536,9 @@ async def evaluate_guesstimate(
         math_score = max(0, min(100, int(result.get("mental_math_score", 75))))
         sanity = max(0, min(100, int(result.get("sanity_check_score", 70))))
 
-        # Refinement 1: Authoritative Deterministic Scoring (35% MECE, 25% Assumptions, 20% Math, 20% Sanity Check)
-        deterministic_overall = max(
-            0,
-            min(
-                100,
-                round(
-                    0.35 * mece + 0.25 * assumptions + 0.20 * math_score + 0.20 * sanity
-                ),
-            ),
-        )
+        # Refinement 1: Authoritative Deterministic Scoring (35% MECE, 25% Assumptions, 20% Math, 20% Sanity Check) with Conventional Half-Up Rounding
+        raw_weighted = 0.35 * mece + 0.25 * assumptions + 0.20 * math_score + 0.20 * sanity
+        deterministic_overall = max(0, min(100, _round_half_up(raw_weighted)))
 
         steps = result.get("model_breakdown_steps") or default_fallback["model_breakdown_steps"]
         strengths = result.get("strengths") or default_fallback["strengths"]
@@ -496,7 +557,7 @@ async def evaluate_guesstimate(
         driver_dict = result.get("sensitivity_driver")
         driver_obj = SensitivityDriverInput(**driver_dict) if isinstance(driver_dict, dict) else None
 
-        # Refinement 4: Deterministic Sensitivity Calculation Engine
+        # Refinement 4: Deterministic Sensitivity Calculation Engine (direction-aware)
         sensitivity_diag = _compute_deterministic_sensitivity(cand_est, driver_obj)
 
         # Candidate branch diagnostics
@@ -511,7 +572,15 @@ async def evaluate_guesstimate(
             branch_diags = cleaned_branches
 
         return {
+            "evaluation_version": 2,
             "overall_score": deterministic_overall,
+            "rubric_scores": {
+                "mece_score": mece,
+                "assumption_score": assumptions,
+                "mental_math_score": math_score,
+                "sanity_check_score": sanity,
+            },
+            # Flat keys preserved for backward compatibility
             "mece_score": mece,
             "mece_feedback": str(result.get("mece_feedback") or default_fallback["mece_feedback"]),
             "assumption_score": assumptions,
@@ -534,7 +603,8 @@ async def evaluate_guesstimate(
                 "assumption": 0.25,
                 "math": 0.20,
                 "sanity": 0.20,
-                "formula_display": "35% MECE + 25% Assumptions + 20% Math + 20% Sanity Check",
+                "rounding_policy": "conventional_half_up",
+                "formula_display": "35% MECE + 25% Assumptions + 20% Math + 20% Sanity Check (Half-Up)",
             },
             "strengths": strengths if isinstance(strengths, list) else [str(strengths)],
             "weaknesses": weaknesses if isinstance(weaknesses, list) else [str(weaknesses)],

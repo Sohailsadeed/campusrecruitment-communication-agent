@@ -9,14 +9,48 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database.engine import Base, SessionLocal, check_and_apply_migrations, engine
 from app.database.seed_hr import seed_hr_questions
 from app.models import AIFeedback, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
+import sys
+from logging.handlers import RotatingFileHandler
 from app.routes import analysis, auth, feedback, guesstimate, hr, progress, sessions, technical
 from config import settings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+# Configure structured file and console logging
+log_format = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+
+# 1. Console Stream Handler (real-time display)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_format)
+console_handler.setLevel(logging.INFO)
+
+# 2. Main Persistent Log File (10 MB, up to 5 rotations)
+app_log_file = settings.logs_dir / "speakflow.log"
+file_handler = RotatingFileHandler(
+    app_log_file,
+    maxBytes=10 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
 )
+file_handler.setFormatter(log_format)
+file_handler.setLevel(logging.INFO)
+
+# 3. Dedicated Error Log File
+error_log_file = settings.logs_dir / "error.log"
+error_handler = RotatingFileHandler(
+    error_log_file,
+    maxBytes=5 * 1024 * 1024,
+    backupCount=3,
+    encoding="utf-8",
+)
+error_handler.setFormatter(log_format)
+error_handler.setLevel(logging.ERROR)
+
+# Root logger setup
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.handlers = [console_handler, file_handler, error_handler]
+
 logger = logging.getLogger("speakflow")
+logger.info("Persistent logging initialized: saving to %s", app_log_file)
 
 
 def create_app() -> FastAPI:

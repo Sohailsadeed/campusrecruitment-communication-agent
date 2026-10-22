@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
     app_name: str = "SpeakFlow API"
     app_version: str = "0.1.0"
     debug: bool = False
+    logs_dir: Path = LOGS_DIR
 
     # Database
     database_url: str = f"sqlite:///{BASE_DIR / 'speakflow.db'}"

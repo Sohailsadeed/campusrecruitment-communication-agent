@@ -8,17 +8,17 @@ Instead of generic conversational chatbots, SpeakFlow partitions interview prepa
 
 ```mermaid
 graph TD
-    subgraph SpeakFlow 4-Round Evaluation Suite
-        R1[Round 1: JAM Fluency\nJust A Minute 60s Delivery]
-        R2[Round 2: Technical Interview\nArchitecture, Conciseness & Anti-Rambling]
-        R3[Round 3: Guesstimate & Sizing\nMECE Tree & Math Sanity Engine]
-        R4[Round 4: HR & Behavioral\nSTAR Coach & Personal 'I' Ownership]
+    subgraph Rounds ["SpeakFlow 4-Round Evaluation Suite"]
+        R1["Round 1: JAM Fluency<br/>Just A Minute 60s Delivery"]
+        R2["Round 2: Technical Interview<br/>Architecture, Conciseness & Anti-Rambling"]
+        R3["Round 3: Guesstimate & Sizing<br/>MECE Tree & Math Sanity Engine"]
+        R4["Round 4: HR & Behavioral<br/>STAR Coach & Personal 'I' Ownership"]
     end
 
-    subgraph 3-Layer Placement Readiness Framework
-        L1[Layer 1: Placement Readiness Matrix\n4 Independent Evaluation Cards]
-        L2[Layer 2: Multi-Round Longitudinal Trajectories\nTarget 85% & Baseline 70% Benchmarks]
-        L3[Layer 3: Cross-Round Session History\nUnified Attempt Audit & Direct Dossier Links]
+    subgraph Framework ["3-Layer Placement Readiness Framework"]
+        L1["Layer 1: Placement Readiness Matrix<br/>4 Independent Evaluation Cards"]
+        L2["Layer 2: Multi-Round Longitudinal Trajectories<br/>Target 85% & Baseline 70% Benchmarks"]
+        L3["Layer 3: Cross-Round Session History<br/>Unified Attempt Audit & Direct Dossier Links"]
     end
 
     R1 --> L1
@@ -73,17 +73,17 @@ SpeakFlow employs a high-performance, unified pipeline architecture. The backend
 
 ```mermaid
 graph TB
-    subgraph Client Layer (React 18 + TypeScript + Vite)
-        UI[Candidate Cockpit]
-        DASH[3-Layer Placement Dashboard]
-        STUDIO_JAM[JAM 60s Studio]
-        STUDIO_TECH[Technical Studio]
-        STUDIO_GUEST[Guesstimate Studio]
-        STUDIO_HR[HR Behavioral Studio]
-        DOSSIER[Interactive Evaluation Dossiers]
+    subgraph ClientLayer ["Client Layer (React 18 + TypeScript + Vite)"]
+        UI["Candidate Cockpit"]
+        DASH["3-Layer Placement Dashboard"]
+        STUDIO_JAM["JAM 60s Studio"]
+        STUDIO_TECH["Technical Studio"]
+        STUDIO_GUEST["Guesstimate Studio"]
+        STUDIO_HR["HR Behavioral Studio"]
+        DOSSIER["Interactive Evaluation Dossiers"]
     end
 
-    subgraph API Gateway & Controller Layer (FastAPI ASGI)
+    subgraph APIGateway ["API Gateway & Controller Layer (FastAPI ASGI)"]
         ROUTER_AUTH["/api/auth (JWT Security)"]
         ROUTER_JAM["/api/analysis (JAM Audio/Vision)"]
         ROUTER_TECH["/api/technical (Architecture & Anti-Rambling)"]
@@ -92,23 +92,23 @@ graph TB
         ROUTER_PROG["/api/progress (3-Layer Matrix & Timelines)"]
     end
 
-    subgraph Deterministic Measurement Engines (Layer 1)
-        WHISPER[WhisperX / Faster-Whisper\nWord-Level Alignment & Timestamps]
-        VAD[Silero Voice Activity Detection\nSilence & Pause Extraction]
-        CV_ENGINE[OpenCV / MediaPipe\nGaze Vector & Posture Tracking]
-        MATH_ENGINE[Symbolic Math Sanity Engine\nArithmetic & Order-of-Magnitude Checks]
+    subgraph TelemetryEngines ["Deterministic Measurement Engines (Layer 1)"]
+        WHISPER["WhisperX / Faster-Whisper<br/>Word-Level Alignment & Timestamps"]
+        VAD["Silero Voice Activity Detection<br/>Silence & Pause Extraction"]
+        CV_ENGINE["OpenCV / MediaPipe<br/>Gaze Vector & Posture Tracking"]
+        MATH_ENGINE["Symbolic Math Sanity Engine<br/>Arithmetic & Order-of-Magnitude Checks"]
     end
 
-    subgraph LLM Evaluator & Reasoning Engines (Layer 2)
-        LLM_STAR[STAR Quadrant Classifier & Agency Scorer]
-        LLM_RAMBLE[Anti-Rambling & Sentence Checkpoint Detector]
-        LLM_JARGON[Jargon vs. Intuitive Concept Classifier]
-        LLM_MECE[MECE Framework Completeness Evaluator]
+    subgraph LLMEvaluators ["LLM Evaluator & Reasoning Engines (Layer 2)"]
+        LLM_STAR["STAR Quadrant Classifier & Agency Scorer"]
+        LLM_RAMBLE["Anti-Rambling & Sentence Checkpoint Detector"]
+        LLM_JARGON["Jargon vs. Intuitive Concept Classifier"]
+        LLM_MECE["MECE Framework Completeness Evaluator"]
     end
 
-    subgraph Persistence & Audit Layer
-        DB[(PostgreSQL 17 / SQLite Dynamic Fallback\nSQLAlchemy ORM)]
-        LOGS[(Persistent Rotating File Handlers\nspeakflow.log / error.log / acceptance_suite.log)]
+    subgraph PersistenceLayer ["Persistence & Audit Layer"]
+        DB[("PostgreSQL 17 / SQLite Dynamic Fallback<br/>SQLAlchemy ORM")]
+        LOGS[("Persistent Rotating File Handlers<br/>speakflow.log / error.log / acceptance_suite.log")]
     end
 
     UI --> ROUTER_AUTH
@@ -206,35 +206,35 @@ Every module in SpeakFlow evolved through direct iterative discovery. The previo
 #### 3. Round 1 Workflow Diagram
 ```mermaid
 flowchart TD
-    Start([Candidate Enters JAM Studio]) --> SelectTopic[Fetch Random / Curated Topic]
-    SelectTopic --> RecordAudio[Candidate Speaks for 60 Seconds]
-    RecordAudio --> Ingest[POST /api/analysis/record]
+    Start(["Candidate Enters JAM Studio"]) --> SelectTopic["Fetch Random or Curated Topic"]
+    SelectTopic --> RecordAudio["Candidate Speaks for 60 Seconds"]
+    RecordAudio --> Ingest["POST /api/analysis/record"]
     
-    subgraph Deterministic Processing
-        Ingest --> WhisperX[WhisperX Forced Alignment\nWord-Level Timestamps]
-        Ingest --> SileroVAD[Silero Voice Activity Detection\nPause Boundaries & Silence Ratio]
-        Ingest --> MediaPipe[OpenCV / MediaPipe\nGaze Vector & Posture Drift]
+    subgraph DetProc ["Deterministic Processing"]
+        Ingest --> WhisperX["WhisperX Forced Alignment<br/>Word-Level Timestamps"]
+        Ingest --> SileroVAD["Silero Voice Activity Detection<br/>Pause Boundaries & Silence Ratio"]
+        Ingest --> MediaPipe["OpenCV / MediaPipe<br/>Gaze Vector & Posture Drift"]
     end
 
-    subgraph Telemetry & Metrics Engine
-        WhisperX --> CalcWPM[Compute Rolling WPM & Pacing Zone\nOptimal: 130-160 WPM]
-        WhisperX --> CalcFiller[Identify Filler Words\num, uh, like, basically]
-        SileroVAD --> CalcPause[Compute Pause Durations & Freezes]
-        MediaPipe --> CalcEye[Compute Eye Contact % strictly during speech]
+    subgraph TelemetryEngine ["Telemetry & Metrics Engine"]
+        WhisperX --> CalcWPM["Compute Rolling WPM & Pacing Zone<br/>Optimal: 130-160 WPM"]
+        WhisperX --> CalcFiller["Identify Filler Words<br/>um, uh, like, basically"]
+        SileroVAD --> CalcPause["Compute Pause Durations & Freezes"]
+        MediaPipe --> CalcEye["Compute Eye Contact % strictly during speech"]
     end
 
-    subgraph Content Evaluation
-        WhisperX --> LLMEval[LLM Structure Scorer\nOpening Hook, Flow, Conclusion]
-        LLMEval --> QuoteCheck[Verify Evidence Quotes are exact substrings]
+    subgraph ContentEval ["Content Evaluation"]
+        WhisperX --> LLMEval["LLM Structure Scorer<br/>Opening Hook, Flow, Conclusion"]
+        LLMEval --> QuoteCheck["Verify Evidence Quotes are exact substrings"]
     end
 
-    CalcWPM --> Consolidate[Persist to SessionAnalysis Table]
+    CalcWPM --> Consolidate["Persist to SessionAnalysis Table"]
     CalcFiller --> Consolidate
     CalcPause --> Consolidate
     CalcEye --> Consolidate
     QuoteCheck --> Consolidate
 
-    Consolidate --> RenderDossier[Render /analysis/:id Dossier\nWaveform Timeline + Video Sync]
+    Consolidate --> RenderDossier["Render /analysis/:id Dossier<br/>Waveform Timeline + Video Sync"]
 
     style RecordAudio fill:#3b82f6,stroke:#1d4ed8,color:#fff
     style WhisperX fill:#0d9488,stroke:#115e59,color:#fff
@@ -261,33 +261,33 @@ flowchart TD
 #### 3. Round 2 Workflow Diagram
 ```mermaid
 flowchart TD
-    Start([Candidate Enters Tech Studio]) --> Config[Select Domain: Backend, ML, DevOps, Frontend\nSelect Seniority: Junior, Mid, Senior, Lead]
-    Config --> Prompt[Generate Real-World Engineering Scenario\ne.g., Stripe Idempotency / High-Throughput Ingestion]
-    Prompt --> CandidateAns[Candidate Articulates Architecture Solution]
-    CandidateAns --> Ingest[POST /api/technical/answer]
+    Start(["Candidate Enters Tech Studio"]) --> Config["Select Domain: Backend, ML, DevOps, Frontend<br/>Select Seniority: Junior, Mid, Senior, Lead"]
+    Config --> Prompt["Generate Engineering Scenario<br/>e.g., Stripe Idempotency / High-Throughput Ingestion"]
+    Prompt --> CandidateAns["Candidate Articulates Architecture Solution"]
+    CandidateAns --> Ingest["POST /api/technical/answer"]
 
-    subgraph Evaluation Pipeline
-        Ingest --> SentSplit[Sentence-Level Segmentation]
-        SentSplit --> CoreAnswer[Detect Core Architecture Concepts]
-        CoreAnswer --> SNR[Calculate Conciseness &\nSignal-to-Noise Ratio]
-        SentSplit --> RambleDetect[Anti-Rambling Engine:\nIdentify Circular Loops]
-        SentSplit --> ConclusionPt[Identify Optimal Conclusion Sentence Checkpoint]
-        SentSplit --> JargonAudit[Jargon vs. Understanding Classifier:\nFlag Unexplained Buzzwords]
+    subgraph EvalPipeline ["Evaluation Pipeline"]
+        Ingest --> SentSplit["Sentence-Level Segmentation"]
+        SentSplit --> CoreAnswer["Detect Core Architecture Concepts"]
+        CoreAnswer --> SNR["Calculate Conciseness &<br/>Signal-to-Noise Ratio"]
+        SentSplit --> RambleDetect["Anti-Rambling Engine:<br/>Identify Circular Loops"]
+        SentSplit --> ConclusionPt["Identify Optimal Conclusion Sentence Checkpoint"]
+        SentSplit --> JargonAudit["Jargon vs. Understanding Classifier:<br/>Flag Unexplained Buzzwords"]
     end
 
-    subgraph Scoring & Synthesis
-        SNR --> ArchScore[Compute Architecture Score /100]
-        RambleDetect --> RambleRate[Compute Rambling Rate %]
-        JargonAudit --> IntuitionScore[Intuition & Trade-Off Score]
-        ConclusionPt --> ModelScript[Generate 45-Second Concise Model Script]
+    subgraph ScoringSynthesis ["Scoring & Synthesis"]
+        SNR --> ArchScore["Compute Architecture Score (0-100)"]
+        RambleDetect --> RambleRate["Compute Rambling Rate %"]
+        JargonAudit --> IntuitionScore["Intuition & Trade-Off Score"]
+        ConclusionPt --> ModelScript["Generate 45-Second Concise Model Script"]
     end
 
-    ArchScore --> Save[Commit to technical_sessions Table]
+    ArchScore --> Save["Commit to technical_sessions Table"]
     RambleRate --> Save
     IntuitionScore --> Save
     ModelScript --> Save
 
-    Save --> Dossier[Render /technical/report/:id Dossier\nSentence Breakdown + Conclusion Checkpoint]
+    Save --> Dossier["Render /technical/report/:id Dossier<br/>Sentence Breakdown + Conclusion Checkpoint"]
 
     style CandidateAns fill:#8b5cf6,stroke:#6d28d9,color:#fff
     style RambleDetect fill:#ef4444,stroke:#991b1b,color:#fff
@@ -313,37 +313,37 @@ flowchart TD
 #### 3. Round 3 Workflow Diagram
 ```mermaid
 flowchart TD
-    Start([Candidate Enters Guesstimate Studio]) --> PickCase[Select Category: Market Sizing, Volume, Revenue\nSelect Tier: Foundation, Intermediate, Advanced]
-    PickCase --> CasePrompt[Present Estimation Problem\ne.g., Annual EV Charger Demand in Urban Tier-1]
-    CasePrompt --> Decompose[Candidate Builds MECE Tree Branches]
-    Decompose --> StateAssumptions[Candidate Declares Population, Penetration & Units]
-    StateAssumptions --> CalcResult[Candidate Calculates Final Value]
-    CalcResult --> Ingest[POST /api/guesstimate/answer]
+    Start(["Candidate Enters Guesstimate Studio"]) --> PickCase["Select Category: Market Sizing, Volume, Revenue<br/>Select Tier: Foundation, Intermediate, Advanced"]
+    PickCase --> CasePrompt["Present Estimation Problem<br/>e.g., Annual EV Charger Demand in Urban Tier-1"]
+    CasePrompt --> Decompose["Candidate Builds MECE Tree Branches"]
+    Decompose --> StateAssumptions["Candidate Declares Population, Penetration & Units"]
+    StateAssumptions --> CalcResult["Candidate Calculates Final Value"]
+    CalcResult --> Ingest["POST /api/guesstimate/answer"]
 
-    subgraph Deterministic Math Engine
-        Ingest --> ExtractEq[Extract Variables & Equations]
-        ExtractEq --> SymbolicMath[Symbolic Computation Engine\nRe-calculate step-by-step products]
-        SymbolicMath --> SanityCheck{Math Matches Candidate?}
-        SanityCheck -->|Match| MathPass[Math Sanity: 100% Passed]
-        SanityCheck -->|Mismatch| MathFail[Math Sanity Penalty: Pinpoint Arithmetic Step]
+    subgraph MathEngine ["Deterministic Math Engine"]
+        Ingest --> ExtractEq["Extract Variables & Equations"]
+        ExtractEq --> SymbolicMath["Symbolic Computation Engine<br/>Re-calculate step-by-step products"]
+        SymbolicMath --> SanityCheck{"Math Matches Candidate?"}
+        SanityCheck -->|Match| MathPass["Math Sanity: 100% Passed"]
+        SanityCheck -->|Mismatch| MathFail["Math Sanity Penalty: Pinpoint Arithmetic Step"]
     end
 
-    subgraph MECE Structure Evaluator
-        Ingest --> LLM_MECE[Evaluate Mutually Exclusive & Collectively Exhaustive Properties]
-        LLM_MECE --> ProxyAudit[Validate Proxy Assumption Feasibility]
+    subgraph MECEEval ["MECE Structure Evaluator"]
+        Ingest --> LLM_MECE["Evaluate Mutually Exclusive & Collectively Exhaustive Properties"]
+        LLM_MECE --> ProxyAudit["Validate Proxy Assumption Feasibility"]
     end
 
-    subgraph Industry Benchmark Engine
-        Ingest --> BenchmarkRange[Load Empirical Range: e.g., 40k - 60k Units / $80M - $120M]
-        BenchmarkRange --> OrderOfMag[Check Order of Magnitude Feasibility]
+    subgraph BenchmarkEngine ["Industry Benchmark Engine"]
+        Ingest --> BenchmarkRange["Load Empirical Range: e.g., 40k - 60k Units ($80M - $120M)"]
+        BenchmarkRange --> OrderOfMag["Check Order of Magnitude Feasibility"]
     end
 
-    MathPass --> Consolidate[Persist to guesstimate_cases Table]
+    MathPass --> Consolidate["Persist to guesstimate_cases Table"]
     MathFail --> Consolidate
     ProxyAudit --> Consolidate
     OrderOfMag --> Consolidate
 
-    Consolidate --> RenderReport[Render /guesstimate/report/:id Dossier\nVisual MECE Tree + Math Audit + Benchmark Range]
+    Consolidate --> RenderReport["Render /guesstimate/report/:id Dossier<br/>Visual MECE Tree + Math Audit + Benchmark Range"]
 
     style Decompose fill:#10b981,stroke:#047857,color:#fff
     style SymbolicMath fill:#059669,stroke:#065f46,color:#fff
@@ -370,33 +370,33 @@ flowchart TD
 #### 3. Round 4 Workflow Diagram
 ```mermaid
 flowchart TD
-    Start([Candidate Enters HR Studio]) --> TargetProfile[Input Target Role & Target Company\ne.g., Engineering Lead at Atlassian]
-    TargetProfile --> QueryDB[Query hr_questions DB Table\nFetch Balanced Competency Set]
-    QueryDB --> AskMainQ[Interviewer Presents Main Behavioral Question]
-    AskMainQ --> CandidateAnswer[Candidate Articulates Spoken or Written Response]
-    CandidateAnswer --> Ingest[POST /api/hr/answer]
+    Start(["Candidate Enters HR Studio"]) --> TargetProfile["Input Target Role & Target Company<br/>e.g., Engineering Lead at Atlassian"]
+    TargetProfile --> QueryDB["Query hr_questions DB Table<br/>Fetch Balanced Competency Set"]
+    QueryDB --> AskMainQ["Interviewer Presents Main Behavioral Question"]
+    AskMainQ --> CandidateAnswer["Candidate Articulates Spoken or Written Response"]
+    CandidateAnswer --> Ingest["POST /api/hr/answer"]
 
-    subgraph STAR & Ownership Evaluator
-        Ingest --> ClassifySTAR[STAR Classifier:\nExtract Situation, Task, Action, Result Segments]
-        Ingest --> AgencyScorer[Personal Agency Scorer:\nMeasure 'I' vs. 'We' Pronoun Ownership Ratio]
-        Ingest --> MetricDetect[Quantifiable Metric Detector:\nIdentify Concrete Business Impact & Numbers]
+    subgraph STAREval ["STAR & Ownership Evaluator"]
+        Ingest --> ClassifySTAR["STAR Classifier:<br/>Extract Situation, Task, Action, Result Segments"]
+        Ingest --> AgencyScorer["Personal Agency Scorer:<br/>Measure First-Person 'I' vs. 'We' Ratio"]
+        Ingest --> MetricDetect["Quantifiable Metric Detector:<br/>Identify Concrete Business Impact & Numbers"]
     end
 
-    subgraph Adaptive State Machine
-        ClassifySTAR --> CompletenessCheck{All 4 STAR Quadrants Present?}
-        CompletenessCheck -->|No & Follow-up Not Used| TriggerFollowUp[Generate 1 Targeted Follow-up:\ne.g., 'What was your specific individual action and the measurable outcome?']
-        CompletenessCheck -->|Yes OR Follow-up Used| ConcludeStage[Mark Question Complete -> Advance to Next Competency]
+    subgraph StateMachine ["Adaptive State Machine"]
+        ClassifySTAR --> CompletenessCheck{"All 4 STAR Quadrants Present?"}
+        CompletenessCheck -->|No and Follow-up Available| TriggerFollowUp["Generate 1 Targeted Follow-up:<br/>Probe Specific Individual Action & Outcome"]
+        CompletenessCheck -->|Yes or Follow-up Used| ConcludeStage["Mark Question Complete and Advance to Next Competency"]
     end
 
-    TriggerFollowUp --> AskFollowUp[Interviewer Asks Follow-up Question]
+    TriggerFollowUp --> AskFollowUp["Interviewer Asks Follow-up Question"]
     AskFollowUp --> CandidateAnswer
 
-    ConcludeStage --> Aggregate[Compute Final Behavioral Fit Score]
+    ConcludeStage --> Aggregate["Compute Final Behavioral Fit Score"]
     AgencyScorer --> Aggregate
     MetricDetect --> Aggregate
 
-    Aggregate --> SaveDB[Persist to hr_interviews Table]
-    SaveDB --> Dossier[Render /hr/report/:id Dossier\nSTAR Quadrants + Ownership Meter + Illustrative Star Script]
+    Aggregate --> SaveDB["Persist to hr_interviews Table"]
+    SaveDB --> Dossier["Render /hr/report/:id Dossier<br/>STAR Quadrants + Ownership Meter + Illustrative Star Script"]
 
     style CandidateAnswer fill:#f59e0b,stroke:#b45309,color:#fff
     style AgencyScorer fill:#d97706,stroke:#b45309,color:#fff
@@ -421,33 +421,33 @@ flowchart TD
 #### 3. Dashboard Aggregation Workflow Diagram
 ```mermaid
 flowchart TD
-    Candidate[Candidate Navigates to Dashboard] --> FetchData[GET /api/progress/placement-readiness]
+    Candidate["Candidate Navigates to Dashboard"] --> FetchData["GET /api/progress/placement-readiness"]
 
-    subgraph Backend Aggregation Pipeline
-        FetchData --> QueryJAM[Query Latest JAM Sessions\nExtract WPM, Clarity & Eye Contact]
-        FetchData --> QueryTech[Query Latest Technical Sessions\nExtract Architecture Score & Conciseness]
-        FetchData --> QueryGuest[Query Latest Guesstimate Cases\nExtract MECE Score & Math Sanity]
-        FetchData --> QueryHR[Query Latest HR Interviews\nExtract STAR Score & Agency Ownership]
+    subgraph AggregationPipeline ["Backend Aggregation Pipeline"]
+        FetchData --> QueryJAM["Query Latest JAM Sessions<br/>Extract WPM, Clarity & Eye Contact"]
+        FetchData --> QueryTech["Query Latest Technical Sessions<br/>Extract Architecture Score & Conciseness"]
+        FetchData --> QueryGuest["Query Latest Guesstimate Cases<br/>Extract MECE Score & Math Sanity"]
+        FetchData --> QueryHR["Query Latest HR Interviews<br/>Extract STAR Score & Agency Ownership"]
     end
 
-    subgraph Layer 1: Readiness Matrix
-        QueryJAM --> Card1[Card 1: JAM Fluency\nPrimary: Clarity 84.5% | Sec: 142 WPM, 88% Gaze]
-        QueryTech --> Card2[Card 2: Technical Interview\nPrimary: Architecture 88% | Sec: 86% Conciseness]
-        QueryGuest --> Card3[Card 3: Guesstimate Sizing\nPrimary: MECE 85% | Sec: 90% Tree, 85% Math]
-        QueryHR --> Card4[Card 4: HR Behavioral\nPrimary: Fit 91% | Sec: 95% STAR, 88% Ownership]
+    subgraph Layer1Matrix ["Layer 1: Readiness Matrix"]
+        QueryJAM --> Card1["Card 1: JAM Fluency<br/>Primary: Clarity 84.5% - Sec: 142 WPM, 88% Gaze"]
+        QueryTech --> Card2["Card 2: Technical Interview<br/>Primary: Architecture 88% - Sec: 86% Conciseness"]
+        QueryGuest --> Card3["Card 3: Guesstimate Sizing<br/>Primary: MECE 85% - Sec: 90% Tree, 85% Math"]
+        QueryHR --> Card4["Card 4: HR Behavioral<br/>Primary: Fit 91% - Sec: 95% STAR, 88% Ownership"]
     end
 
-    subgraph Layer 2: Longitudinal Timelines
-        FetchData --> TrendTech[Technical Rigor Trajectory\nTarget 85% & Baseline 70% Bands]
-        FetchData --> TrendGuest[MECE Decomposition Trajectory\nTarget 85% & Baseline 70% Bands]
-        FetchData --> TrendHR[STAR Behavioral Trajectory\nTarget 85% & Baseline 70% Bands]
+    subgraph Layer2Timelines ["Layer 2: Longitudinal Timelines"]
+        FetchData --> TrendTech["Technical Rigor Trajectory<br/>Target 85% & Baseline 70% Bands"]
+        FetchData --> TrendGuest["MECE Decomposition Trajectory<br/>Target 85% & Baseline 70% Bands"]
+        FetchData --> TrendHR["STAR Behavioral Trajectory<br/>Target 85% & Baseline 70% Bands"]
     end
 
-    subgraph Layer 3: Unified Session Audit
-        FetchData --> HistTable[Federated Session Table\nRound Badges + Scores + Direct Dossier Links]
+    subgraph Layer3Audit ["Layer 3: Unified Session Audit"]
+        FetchData --> HistTable["Federated Session Table<br/>Round Badges + Scores + Direct Dossier Links"]
     end
 
-    Card1 --> Cockpit[Render Unified Dashboard UI]
+    Card1 --> Cockpit["Render Unified Dashboard UI"]
     Card2 --> Cockpit
     Card3 --> Cockpit
     Card4 --> Cockpit
@@ -658,13 +658,13 @@ The initial architecture proposed a **Java Spring Boot orchestrator** coupled to
 
 ```mermaid
 graph TD
-    subgraph Initial Failed Approach
-        A1[React Frontend] -->|Multipart Audio| B1[Java Spring Boot]
-        B1 -->|HTTP Re-stream Overhead| C1[Python FastAPI WhisperX]
+    subgraph InitialFailedApproach ["Initial Failed Approach"]
+        A1["React Frontend"] -->|Multipart Audio| B1["Java Spring Boot"]
+        B1 -->|HTTP Re-stream Overhead| C1["Python FastAPI WhisperX"]
         C1 -->|Latency & Network Gaps| B1
-        B1 -->|Sync LLM Blocking| D1[Spring AI Evaluator]
+        B1 -->|Sync LLM Blocking| D1["Spring AI Evaluator"]
         D1 -->|String Substring Checks| B1
-        B1 -->|Complex Multi-Hop Sync| E1[PostgreSQL]
+        B1 -->|Complex Multi-Hop Sync| E1["PostgreSQL"]
     end
     
     style B1 fill:#ef4444,stroke:#991b1b,color:#fff
@@ -684,19 +684,19 @@ The platform was consolidated into a unified, high-performance architecture:
 
 ```mermaid
 graph TD
-    subgraph Current Unified Architecture (SpeakFlow v2.0)
-        Client[React 18 + Vite Cockpit] -->|Direct JWT REST & Audio Stream| API[FastAPI Unified Backend]
+    subgraph CurrentUnifiedArch ["Current Unified Architecture (SpeakFlow v2.0)"]
+        Client["React 18 + Vite Cockpit"] -->|Direct JWT REST & Audio Stream| API["FastAPI Unified Backend"]
         
-        API -->|Deterministic DSP & Speech| DSP[Faster-Whisper + Silero VAD]
-        API -->|Affective Visual Analytics| CV[MediaPipe FaceMesh & Pose]
-        API -->|Symbolic Verification| MATH[Deterministic Math Engine]
+        API -->|Deterministic DSP & Speech| DSP["Faster-Whisper + Silero VAD"]
+        API -->|Affective Visual Analytics| CV["MediaPipe FaceMesh & Pose"]
+        API -->|Symbolic Verification| MATH["Deterministic Math Engine"]
         
-        API -->|Multi-Round State Graphs| State[Round State Machines & Evaluators]
+        API -->|Multi-Round State Graphs| State["Round State Machines & Evaluators"]
         
-        State -->|Grounded Rubric Evaluation| LLM[Bounded LLM Evaluator\nStrict Substring Verification]
+        State -->|Grounded Rubric Evaluation| LLM["Bounded LLM Evaluator<br/>Strict Substring Verification"]
         
-        API -->|Sandboxed Profiles & Telemetry| DB[(PostgreSQL 17 / SQLite Fallback\nSQLAlchemy ORM)]
-        API -->|Persistent Audit Logs| LOGS[(RotatingFileHandlers\nbackend/logs/)]
+        API -->|Sandboxed Profiles & Telemetry| DB[("PostgreSQL 17 / SQLite Fallback<br/>SQLAlchemy ORM")]
+        API -->|Persistent Audit Logs| LOGS[("RotatingFileHandlers<br/>backend/logs/")]
     end
 
     style API fill:#10b981,stroke:#047857,color:#fff

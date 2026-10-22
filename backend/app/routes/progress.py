@@ -240,10 +240,10 @@ def get_guesstimate_progress(
                 "category": category,
                 "difficulty": gc.difficulty if gc else "Intermediate",
                 "score": round(float(score), 1),
-                "structure_score": evaluation.get("structure_score", 0),
-                "math_score": evaluation.get("math_score", 0),
-                "proxy_score": evaluation.get("proxy_score", 0),
-                "sanity_score": evaluation.get("sanity_score", 0),
+                "structure_score": evaluation.get("mece_score") or evaluation.get("structure_score", 0),
+                "math_score": evaluation.get("mental_math_score") or evaluation.get("math_score", 0),
+                "proxy_score": evaluation.get("assumption_score") or evaluation.get("proxy_score", 0),
+                "sanity_score": evaluation.get("sanity_check_score") or evaluation.get("sanity_score", 0),
                 "verdict": verdict,
                 "created_at": s.created_at.isoformat(),
             })
@@ -507,17 +507,17 @@ def get_placement_readiness(
         "secondary_metrics": [
             {
                 "label": "Decomposition",
-                "value": f"{latest_guess_eval.get('structure_score', 0)}%" if latest_guess_eval else "—",
+                "value": f"{latest_guess_eval.get('mece_score') or latest_guess_eval.get('structure_score', 0)}%" if latest_guess_eval else "—",
                 "unit": "MECE",
             },
             {
                 "label": "Math Sanity",
-                "value": f"{latest_guess_eval.get('math_score', 0)}%" if latest_guess_eval else "—",
+                "value": f"{latest_guess_eval.get('mental_math_score') or latest_guess_eval.get('math_score', 0)}%" if latest_guess_eval else "—",
                 "unit": "accuracy",
             },
             {
                 "label": "Proxy Rigor",
-                "value": f"{latest_guess_eval.get('proxy_score', 0)}%" if latest_guess_eval else "—",
+                "value": f"{latest_guess_eval.get('assumption_score') or latest_guess_eval.get('proxy_score', 0)}%" if latest_guess_eval else "—",
                 "unit": "assumptions",
             },
         ],

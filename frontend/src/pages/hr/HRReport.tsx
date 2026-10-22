@@ -599,7 +599,7 @@ export default function HRReport() {
                       Benchmark STAR Articulation Script
                     </h3>
                     <p className="text-xs text-outline">
-                      45–60s golden-standard delivery with quantified impact and personal agency
+                      Illustrative benchmark response — serves as an articulation model rather than a singular ideal answer
                     </p>
                   </div>
                 </div>

@@ -169,7 +169,7 @@ export default function HRProgressDashboard({
                   strokeDasharray="4 4"
                   strokeOpacity={0.8}
                   label={{
-                    value: "Executive Ready (85%)",
+                    value: "Target Behavioral Threshold (85% Target)",
                     position: "insideTopRight",
                     fill: "#c0c1ff",
                     fontSize: 10,
@@ -181,7 +181,7 @@ export default function HRProgressDashboard({
                   strokeDasharray="4 4"
                   strokeOpacity={0.5}
                   label={{
-                    value: "Strong STAR (70%)",
+                    value: "Baseline Preparation Threshold (70% Target)",
                     position: "insideBottomRight",
                     fill: "#f59e0b",
                     fontSize: 10,

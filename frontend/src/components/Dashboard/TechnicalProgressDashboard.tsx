@@ -173,7 +173,7 @@ export default function TechnicalProgressDashboard({
                   strokeDasharray="4 4"
                   strokeWidth={1.5}
                   label={{
-                    value: "Staff Strong Hire (85+)",
+                    value: "Target Readiness Threshold (85%)",
                     position: "insideTopRight",
                     fill: "#c0c1ff",
                     fontSize: 10,
@@ -185,7 +185,7 @@ export default function TechnicalProgressDashboard({
                   strokeDasharray="2 2"
                   strokeWidth={1}
                   label={{
-                    value: "Competitive Benchmark (70+)",
+                    value: "Baseline Preparation Threshold (70%)",
                     position: "insideBottomRight",
                     fill: "#f59e0b",
                     fontSize: 9,

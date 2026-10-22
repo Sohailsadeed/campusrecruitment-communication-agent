@@ -167,7 +167,7 @@ export default function GuesstimateProgressDashboard({
                   strokeDasharray="4 4"
                   strokeOpacity={0.8}
                   label={{
-                    value: "MBB / Tier-1 Ready (85%)",
+                    value: "Target Consulting Threshold (85% Target)",
                     position: "insideTopRight",
                     fill: "#4edea3",
                     fontSize: 10,
@@ -179,7 +179,7 @@ export default function GuesstimateProgressDashboard({
                   strokeDasharray="4 4"
                   strokeOpacity={0.5}
                   label={{
-                    value: "Competitive (70%)",
+                    value: "Baseline Preparation Threshold (70% Target)",
                     position: "insideBottomRight",
                     fill: "#f59e0b",
                     fontSize: 10,

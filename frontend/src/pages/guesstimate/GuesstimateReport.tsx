@@ -359,7 +359,7 @@ export default function GuesstimateReport() {
           <div className="flex items-center justify-between">
             <span className="font-label-caps text-xs uppercase text-tertiary font-bold tracking-wider flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[18px]">model_training</span>
-              Exemplary 60-Second Verbal Delivery Script
+              Illustrative 60-Second Verbal Delivery Model (Benchmark Example)
             </span>
             <button
               type="button"

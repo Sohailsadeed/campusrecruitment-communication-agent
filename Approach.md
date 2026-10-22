@@ -2,169 +2,562 @@
 
 ## 1. Introduction to the Modules
 
-SpeakFlow is a specialized, end-to-end communication and interview practice platform designed to prepare candidates for competitive campus placement drives. The platform structures preparation into **four specialized evaluation rounds**, adhering to a core architectural philosophy: **predictable state machines, objective deterministic measurements before subjective evaluation, explainable evidence-based scoring, and zero artificial metric-blurring across rounds**.
+SpeakFlow is a comprehensive, AI-orchestrated campus placement interview preparation platform. The platform prepares engineering and business candidates for the rigorous, multi-stage recruitment pipelines typical of top technology firms, investment banks, and management consultancies.
+
+Instead of generic conversational chatbots, SpeakFlow partitions interview preparation into **four specialized evaluation rounds** and unifies them under a **3-Layer Placement Readiness Dashboard**. Every module adheres to a core engineering philosophy: **predictable state machines, objective deterministic measurements prior to subjective scoring, explainable evidence-backed feedback, and zero artificial cross-round metric blurring**.
+
+```mermaid
+graph TD
+    subgraph SpeakFlow 4-Round Evaluation Suite
+        R1[Round 1: JAM Fluency\nJust A Minute 60s Delivery]
+        R2[Round 2: Technical Interview\nArchitecture, Conciseness & Anti-Rambling]
+        R3[Round 3: Guesstimate & Sizing\nMECE Tree & Math Sanity Engine]
+        R4[Round 4: HR & Behavioral\nSTAR Coach & Personal 'I' Ownership]
+    end
+
+    subgraph 3-Layer Placement Readiness Framework
+        L1[Layer 1: Placement Readiness Matrix\n4 Independent Evaluation Cards]
+        L2[Layer 2: Multi-Round Longitudinal Trajectories\nTarget 85% & Baseline 70% Benchmarks]
+        L3[Layer 3: Cross-Round Session History\nUnified Attempt Audit & Direct Dossier Links]
+    end
+
+    R1 --> L1
+    R2 --> L1
+    R3 --> L1
+    R4 --> L1
+
+    R1 --> L2
+    R2 --> L2
+    R3 --> L2
+    R4 --> L2
+
+    R1 --> L3
+    R2 --> L3
+    R3 --> L3
+    R4 --> L3
+
+    style R1 fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    style R2 fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style R3 fill:#10b981,stroke:#047857,color:#fff
+    style R4 fill:#f59e0b,stroke:#b45309,color:#fff
+    style L1 fill:#06b6d4,stroke:#0e7490,color:#fff
+    style L2 fill:#ec4899,stroke:#be185d,color:#fff
+    style L3 fill:#64748b,stroke:#334155,color:#fff
+```
 
 ### Round 1: JAM (Just A Minute) Fluency Module
-This module trains students to speak concisely, coherently, and confidently under a strict 60-second time constraint.
-* **Core Function:** Evaluates speech delivery (WPM, pacing zones, filler words, pause duration, silence) and content flow (topic relevance, opening hooks, conclusion).
-* **Multi-Modal Sensing:** Integrates audio ingestion with optional computer vision (MediaPipe / OpenCV) for eye contact tracking and head posture stability.
-* **Key Constraint:** Objective delivery metrics are calculated deterministically (via Whisper/WhisperX and Voice Activity Detection); LLMs are strictly bounded to analyzing verified transcript text for topical structure.
+* **Core Function:** Trains candidates to deliver concise, compelling 60-second impromptu speeches on randomized or curated topics.
+* **Evaluation Focus:** Objective delivery metrics (WPM, pacing zones, filler words, pause duration, silence ratio) coupled with computer-vision gaze tracking (eye contact adherence, head stability) and structural coherence (opening hook, progression, conclusion).
+* **Key Constraint:** Objective vocal and visual telemetry is computed deterministically via Python, WhisperX, Silero VAD, and OpenCV; LLMs are restricted strictly to analyzing verified transcript text for topical relevance.
 
 ### Round 2: Technical Interview Module
-This module evaluates role-specific engineering articulation across disciplines (Backend, Frontend, Fullstack, Machine Learning, DevOps, Systems).
-* **Core Function:** Tests candidates on system design, architecture trade-offs, algorithmic reasoning, and production debugging.
-* **Evaluation Focus:**
-  * **Conciseness & Anti-Rambling Penalty:** Detects when candidates talk in circles instead of concluding.
-  * **Jargon vs. Intuitive Understanding:** Differentiates textbook memorization from practical conceptual grasp.
-  * **STAR Technical Execution:** Evaluates technical reasoning, implementation trade-offs, and measurable engineering outcomes.
-* **Key Constraint:** Provides sentence-level breakdown identifying optimal conclusion points and flagging ungrounded buzzwords.
+* **Core Function:** Simulates role-specific engineering rounds (Senior Backend, Frontend, Fullstack, Machine Learning, DevOps, Systems Architecture).
+* **Evaluation Focus:** Architectural soundness, system trade-offs (CAP theorem, caching, latency), **Signal-to-Noise Ratio (SNR) / Conciseness**, **Anti-Rambling Penalties**, and **Jargon vs. Intuitive Understanding**.
+* **Key Constraint:** Enforces sentence-level analysis identifying the exact checkpoint where the candidate answered the question and began rambling in circles.
 
 ### Round 3: Guesstimate & Market Sizing Module
-This module prepares candidates for analytical consulting and product management estimation rounds.
-* **Core Function:** Presents market sizing, volume estimation, and operational capacity problems across multiple difficulty tiers.
-* **Evaluation Focus:**
-  * **MECE Decomposition:** Ensures candidate breakdowns are Mutually Exclusive and Collectively Exhaustive.
-  * **Math Sanity Engine:** Programmatically validates arithmetic calculations against candidate-declared assumptions.
-  * **Proxy & Benchmark Rigor:** Validates whether assumptions fall within realistic industry reference ranges.
-* **Key Constraint:** The calculation engine evaluates computational consistency separately from structural decomposition quality.
+* **Core Function:** Evaluates quantitative estimation, market sizing, and capacity estimation problems across structured difficulty levels.
+* **Evaluation Focus:** **MECE (Mutually Exclusive, Collectively Exhaustive) Tree Decomposition**, **Step-by-Step Mathematical Verification**, and **Proxy/Benchmark Realism**.
+* **Key Constraint:** Arithmetic consistency is validated via a deterministic symbolic math engine, completely preventing LLM hallucination of numerical operations.
 
 ### Round 4: HR & Behavioral Interview Module
-This module prepares students for behavioral competency and cultural alignment rounds.
-* **Core Function:** Multi-turn adaptive mock interview drawing from a 40-question database bank across 8 behavioral competencies (`Adaptability`, `Conflict Resolution`, `Leadership`, `Team Collaboration`, `Culture Fit`, `Motivation`, `Career Goals`, `Work Style`).
-* **Evaluation Focus:**
-  * **STAR Method Coaching:** Tracks coverage across Situation, Task, Action, and Result.
-  * **Personal Ownership ("I" vs. "We" Ratio):** Detects whether candidates articulate personal agency or hide behind team actions.
-  * **Concrete Specificity & Measurable Outcomes:** Penalizes vague generalizations; rewards quantified business impact.
-* **Key Constraint:** State machine limits adaptive follow-ups to at most one per main question when essential STAR criteria are missing. Illustrative scripts are labeled as examples, not absolute ideal answers.
+* **Core Function:** Multi-turn adaptive mock interviews using a deduplicated 40-question database bank across 8 behavioral categories (`Adaptability`, `Conflict Resolution`, `Leadership`, `Team Collaboration`, `Culture Fit`, `Motivation`, `Career Goals`, `Work Style`).
+* **Evaluation Focus:** **STAR Method Completeness** (Situation, Task, Action, Result), **Personal Ownership ("I" vs. "We" Ratio)**, and **Concrete Specificity & Measurable Business Impact**.
+* **Key Constraint:** Enforces an adaptive state machine allowing at most one targeted follow-up question when an essential STAR quadrant is absent.
 
 ---
 
 ## 2. Unified High-Level Architecture
 
-SpeakFlow employs a decoupled, multi-tiered pipeline architecture where the backend acts as the deterministic source of truth, coordinating specialized ML models, audio processors, and LLM evaluators.
+SpeakFlow employs a high-performance, unified pipeline architecture. The backend acts as the deterministic source of truth, coordinating specialized speech models, computer vision engines, database repositories, and structured LLM evaluators.
 
-```
-+-----------------------------------------------------------------------------------------+
-|                                    REACT FRONTEND                                       |
-|  - 3-Layer Placement Dashboard  - JAM Studio & Report   - Technical Studio & Report     |
-|  - Guesstimate Studio & Report - HR Studio & Report    - Audio/Video Web APIs          |
-+--------------------------------------------+--------------------------------------------+
-                                             | HTTP / REST / Multipart
-                                             v
-+-----------------------------------------------------------------------------------------+
-|                                   FASTAPI BACKEND                                       |
-|  - Auth & Session State Machine (/api/sessions, /api/auth)                              |
-|  - Round 1: JAM Audio Analysis (/api/analysis)                                          |
-|  - Round 2: Technical Evaluation (/api/technical)                                       |
-|  - Round 3: Guesstimate MECE Engine (/api/guesstimate)                                  |
-|  - Round 4: HR State Machine & STAR Coach (/api/hr)                                     |
-|  - Cross-Round Progress & Placement Readiness (/api/progress)                           |
-+--------------------+-----------------------+---------------------+----------------------+
-                     |                       |                     |
-                     v                       v                     v
-          +--------------------+  +--------------------+  +--------------------+
-          | DETERMINISTIC ML   |  |   LLM EVALUATOR    |  |  PERSISTENCE &     |
-          | & AUDIO ENGINE     |  |   (OPENAI/GEMINI)  |  |  LOGGING           |
-          | - WhisperX / Whisper|  | - STAR Classifier  |  | - PostgreSQL /     |
-          | - Silero VAD       |  | - MECE Evaluator   |  |   SQLite Fallback  |
-          | - OpenCV Eye Track |  | - Anti-Rambling    |  | - RotatingFile-    |
-          | - Math Sanity Math |  | - Feedback Scripts |  |   Handlers (.log)  |
-          +--------------------+  +--------------------+  +--------------------+
-```
+```mermaid
+graph TB
+    subgraph Client Layer (React 18 + TypeScript + Vite)
+        UI[Candidate Cockpit]
+        DASH[3-Layer Placement Dashboard]
+        STUDIO_JAM[JAM 60s Studio]
+        STUDIO_TECH[Technical Studio]
+        STUDIO_GUEST[Guesstimate Studio]
+        STUDIO_HR[HR Behavioral Studio]
+        DOSSIER[Interactive Evaluation Dossiers]
+    end
 
-### Architecture Flow:
-1. **React 18 + TypeScript + Vite Frontend:** Modern UI with Tailwind CSS, Lucide icons, Recharts visualizations, synchronized waveform playback, and responsive video recording studios.
-2. **FastAPI Backend (Layer 3 - Orchestrator):** Manages user sessions, interview state transitions, question bank querying, input validation, and LLM orchestration.
-3. **Deterministic Objective Services (Layer 1):**
-   * WhisperX / Whisper for word-level timestamped transcription and confidence scoring.
-   * Silero VAD (Voice Activity Detection) for pause, speech duration, and silence boundary calculation.
-   * OpenCV / MediaPipe for gaze vector and posture orientation tracking.
-   * Symbolic Math Engine for guesstimate arithmetic verification.
-4. **LLM Evaluator (Layer 2):** Bounded LLM inference running on structured JSON schemas, analyzing transcripts against strict rubrics and producing verifiable quotes.
-5. **Database & Logging Layer:**
-   * PostgreSQL (primary) with resilient SQLite dynamic fallback (`speakflow.db`) via SQLAlchemy.
-   * Disk-persisted logging via Python `RotatingFileHandler` writing to `backend/logs/speakflow.log` and `error.log`.
+    subgraph API Gateway & Controller Layer (FastAPI ASGI)
+        ROUTER_AUTH["/api/auth (JWT Security)"]
+        ROUTER_JAM["/api/analysis (JAM Audio/Vision)"]
+        ROUTER_TECH["/api/technical (Architecture & Anti-Rambling)"]
+        ROUTER_GUEST["/api/guesstimate (MECE & Math Engine)"]
+        ROUTER_HR["/api/hr (STAR Coach & 40-Question DB Bank)"]
+        ROUTER_PROG["/api/progress (3-Layer Matrix & Timelines)"]
+    end
+
+    subgraph Deterministic Measurement Engines (Layer 1)
+        WHISPER[WhisperX / Faster-Whisper\nWord-Level Alignment & Timestamps]
+        VAD[Silero Voice Activity Detection\nSilence & Pause Extraction]
+        CV_ENGINE[OpenCV / MediaPipe\nGaze Vector & Posture Tracking]
+        MATH_ENGINE[Symbolic Math Sanity Engine\nArithmetic & Order-of-Magnitude Checks]
+    end
+
+    subgraph LLM Evaluator & Reasoning Engines (Layer 2)
+        LLM_STAR[STAR Quadrant Classifier & Agency Scorer]
+        LLM_RAMBLE[Anti-Rambling & Sentence Checkpoint Detector]
+        LLM_JARGON[Jargon vs. Intuitive Concept Classifier]
+        LLM_MECE[MECE Framework Completeness Evaluator]
+    end
+
+    subgraph Persistence & Audit Layer
+        DB[(PostgreSQL 17 / SQLite Dynamic Fallback\nSQLAlchemy ORM)]
+        LOGS[(Persistent Rotating File Handlers\nspeakflow.log / error.log / acceptance_suite.log)]
+    end
+
+    UI --> ROUTER_AUTH
+    STUDIO_JAM --> ROUTER_JAM
+    STUDIO_TECH --> ROUTER_TECH
+    STUDIO_GUEST --> ROUTER_GUEST
+    STUDIO_HR --> ROUTER_HR
+    DASH --> ROUTER_PROG
+    DOSSIER --> ROUTER_PROG
+
+    ROUTER_JAM --> WHISPER
+    ROUTER_JAM --> VAD
+    ROUTER_JAM --> CV_ENGINE
+    ROUTER_GUEST --> MATH_ENGINE
+
+    ROUTER_TECH --> LLM_RAMBLE
+    ROUTER_TECH --> LLM_JARGON
+    ROUTER_GUEST --> LLM_MECE
+    ROUTER_HR --> LLM_STAR
+
+    ROUTER_AUTH --> DB
+    ROUTER_JAM --> DB
+    ROUTER_TECH --> DB
+    ROUTER_GUEST --> DB
+    ROUTER_HR --> DB
+    ROUTER_PROG --> DB
+
+    ROUTER_JAM --> LOGS
+    ROUTER_TECH --> LOGS
+    ROUTER_GUEST --> LOGS
+    ROUTER_HR --> LOGS
+
+    style UI fill:#1e293b,stroke:#475569,color:#fff
+    style DASH fill:#0284c7,stroke:#0369a1,color:#fff
+    style ROUTER_JAM fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    style ROUTER_TECH fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style ROUTER_GUEST fill:#10b981,stroke:#047857,color:#fff
+    style ROUTER_HR fill:#f59e0b,stroke:#b45309,color:#fff
+    style WHISPER fill:#0d9488,stroke:#115e59,color:#fff
+    style MATH_ENGINE fill:#059669,stroke:#065f46,color:#fff
+    style DB fill:#4338ca,stroke:#3730a3,color:#fff
+    style LOGS fill:#334155,stroke:#1e293b,color:#fff
+```
 
 ---
 
 ## 3. Component Responsibilities
 
-### Layer 1: Objective Telemetry & Audio/Vision Engine
-* **Audio Processing:** Validates MIME types, normalizes audio to 16kHz mono WAV, and computes audio duration.
-* **Transcription & Alignment:** Runs WhisperX to obtain word-level alignment, confidence intervals, and transcript text.
-* **Delivery Metrics:** Computes Words Per Minute (WPM), speech-to-pause ratio, filler word occurrences (`um`, `uh`, `like`, `you know`), silence distribution, and repetition counts without LLM guesswork.
-* **Visual Telemetry:** Computes face landmark alignment, eye contact percentage, and fidgeting/head drift metrics.
-* **Calculation Verification:** Evaluates step-by-step mathematical consistency for guesstimate estimation trees.
+### Layer 1: Objective Telemetry & Deterministic Engines
+* **Audio Telemetry:** Ingests WebM/WAV audio, performs 16kHz mono normalization, runs **WhisperX** for word-level forced alignment, and calculates exact Word-Per-Minute (WPM) curves.
+* **Acoustic Pause Detection:** Deploys **Silero VAD** to detect acoustic energy boundaries, distinguishing purposeful rhetorical pauses from awkward hesitation without relying on text heuristics.
+* **Computer Vision Tracking:** Processes webcam frames via **OpenCV / MediaPipe FaceMesh** to track gaze vectors, eye contact percentages, and head pose stability strictly during vocalized speech.
+* **Deterministic Math Validation:** Evaluates quantitative formulas in guesstimate trees using symbolic computation, verifying arithmetic calculations against user-declared assumptions.
 
-### Layer 2: LLM Reasoning & Evaluator Engine
-* **JAM Content Scorer:** Assesses topical relevance, structural progression, and clarity on calibrated rubrics with transcript citations.
-* **Technical Architecture Evaluator:** Analyzes architectural rigor, flags rote jargon vs. applied comprehension, penalizes rambling, and pinpoints where an answer should have concluded.
-* **Guesstimate MECE Engine:** Evaluates framework completeness, step-by-step logical branching, and proxy assumption realism.
-* **HR STAR Coach:** Maps transcript fragments to Situation, Task, Action, and Result; calculates personal ownership ratio ("I" vs. "We"); detects concrete metrics and business impact.
-* *Rule:* LLMs are never permitted to generate synthetic delivery metrics or quote nonexistent statements. All quotes must be exact transcript substrings.
+### Layer 2: LLM Reasoning & Evaluator Engines
+* **Grounded Substring Extraction:** All qualitative feedback must quote literal substrings from the candidate's transcript. Hallucinated evidence is strictly blocked.
+* **Anti-Rambling & Conciseness Engine:** Computes signal-to-noise ratios, tags repetitive loops, and identifies the exact sentence index where the candidate answered the prompt and could have concluded.
+* **Jargon vs. Intuition Classifier:** Detects textbook definitions recited without mechanical intuition; rewards concrete real-world metaphors and implementation trade-offs.
+* **STAR & Ownership Analyzer:** Classifies answer segments into Situation, Task, Action, and Result; measures the ratio of first-person ("I") vs. plural ("We") pronouns.
 
-### Layer 3: FastAPI Backend & State Management
-* **State Machines:** Enforces round flow constraints (e.g., 60-second JAM hard limit, 1 adaptive follow-up maximum for HR).
-* **Question Bank Service:** Dynamically queries `hr_questions` and guesstimate catalogs from the database with category, role, and difficulty filtering.
-* **Calibration & Thresholds:** Presents performance thresholds as calibrated preparation targets (70% Baseline / 85% Target Ready) rather than misleading absolute hiring predictions.
-* **Persistence & Auditability:** Commits all evaluations to PostgreSQL/SQLite and writes execution logs to disk.
+### Layer 3: FastAPI Backend Orchestrator & State Management
+* **Interview State Machine:** Governs round lifecycle transitions (e.g., 60-second hard cutoff for JAM, 1 adaptive follow-up limit for HR).
+* **Database Management:** SQLAlchemy models with dynamic engine initialization: targets PostgreSQL in production, with seamless 3-second fallback to SQLite (`speakflow.db`) if Docker is offline.
+* **Preparation Target Calibrations:** Calibrates benchmark targets (Baseline 70% / Target 85%) as prep guidelines rather than absolute hiring predictions.
+* **Logging System:** Uses Python `RotatingFileHandler` (10 MB, 5 backups) writing to `backend/logs/speakflow.log` and `error.log`.
 
-### Layer 4: 3-Layer Unified Placement Readiness Dashboard
-* **Layer 1: Placement Readiness Matrix:** Displays 4 dedicated round cards. Each card surfaces its own primary metric (JAM Delivery, Tech Architecture Rigor, Guesstimate MECE, HR Behavioral Fit) and specialized secondary indicators without cross-round score blurring.
-* **Layer 2: Longitudinal Skill Trajectories:** Historical trendlines tracking session-by-session improvement across distinct dimensions against calibrated benchmark bands.
-* **Layer 3: Cross-Round Session History:** Centralized session log with round badges, scores, timestamps, and direct deep-links to comprehensive round dossiers (`/analysis/{id}`, `/technical/report/{id}`, `/guesstimate/report/{id}`, `/hr/report/{id}`).
+### Layer 4: 3-Layer Placement Readiness Dashboard
+* **Layer 1 (Readiness Matrix):** Four independent round cards displaying specialized metrics (JAM delivery, Tech architecture, Guesstimate MECE, HR behavioral fit) without score-blurring.
+* **Layer 2 (Longitudinal Trajectories):** Historical skill trendlines tracking performance against calibrated target thresholds.
+* **Layer 3 (Cross-Round Session History):** Chronological log of attempts with direct links to comprehensive dossiers.
 
 ---
 
-## 4. Implementation Workflows
+## 4. Implementation Workflows, Failure Analyses & Feature Innovations
 
-### A. Round 1: JAM (Just A Minute) Fluency Workflow
-1. **Topic Selection:** User selects or randomizes a JAM topic and initiates recording.
-2. **Audio/Video Capture:** Frontend captures up to 60 seconds of WebM/WAV audio and video frames.
-3. **Deterministic Telemetry:** Audio is submitted to `/api/analysis/record`. Whisper extracts words with timestamps; VAD extracts speech vs. silence segments; OpenCV tracks gaze vectors.
-4. **Content Evaluation:** Transcript is analyzed for relevance, opening hook, and conclusion structure.
-5. **Dossier Generation:** `/analysis/{id}` visualizes the synchronized audio timeline, pacing zones (Optimal 130–160 WPM), filler word timestamps, and eye-contact heatmaps.
+Every module in SpeakFlow evolved through direct iterative discovery. The previous naive approaches failed in realistic recruitment settings; analyzing these failures led to the design of the current features.
 
-### B. Round 2: Technical Interview Workflow
-1. **Track Configuration:** User selects technical domain (e.g., Backend, Frontend, ML) and target seniority tier (Junior, Mid, Senior, Lead).
-2. **Problem Ingestion:** System provides technical prompt or architectural scenario. Candidate speaks or types response.
-3. **Anti-Rambling & Conciseness Audit:** Backend identifies core architectural answer and flags circular restatements or bloated filler phrasing.
-4. **Jargon vs. Intuition Verification:** Evaluator separates properly explained technical concepts from memorized buzzwords.
-5. **Technical Dossier:** `/technical/report/{id}` renders architecture score, conciseness rating, sentence-by-sentence rambling analysis, and optimized rewrite examples.
+---
 
-### C. Round 3: Guesstimate & Market Sizing Workflow
-1. **Case Selection:** User selects category (Market Sizing, Revenue Estimation, Volume Sizing) and difficulty tier.
-2. **Tree Decomposition:** User structures estimation into top-down or bottom-up branches.
-3. **Math Sanity Check:** Backend symbolically verifies calculations against candidate's declared population, penetration, and replacement rates.
-4. **Benchmark Comparison:** Results are evaluated against market bounds (e.g., $80M–$120M target range).
-5. **Guesstimate Dossier:** `/guesstimate/report/{id}` displays MECE tree visualization, mathematical correctness score, and sensitivity analysis.
+### A. Round 1: JAM (Just A Minute) Fluency
 
-### D. Round 4: HR & Behavioral Interview Workflow
-1. **Interview Initialization:** Frontend calls `/api/hr/start` with candidate's target role and company. System loads balanced questions from `hr_questions` table.
-2. **Candidate Response:** Candidate records or submits their behavioral answer.
-3. **STAR & Ownership Evaluation:** System extracts Situation, Task, Action, and Result components, computes "I" agency percentage, and checks for quantified metrics.
-4. **Adaptive Follow-Up State Machine:** If a critical STAR quadrant is absent (e.g., missing measurable Result), the system generates exactly one targeted follow-up. If complete, it moves to the next competency question.
-5. **Behavioral Dossier:** `/hr/report/{id}` renders STAR quadrant breakdown, personal agency score, green/red flag feedback, and an illustrative star response script.
+#### 1. Why the Previous Approach Failed
+* **Text-Only Transcription Shortcomings:** Evaluating plain text transcripts discarded crucial vocal signals (pacing, rhythm, filler words, and awkward silences).
+* **Averaged WPM Blindspots:** A student speaking at 220 WPM for 20 seconds and then freezing for 40 seconds averaged 73 WPM—appearing "slow" rather than exhibiting severe pacing collapse.
+* **Lack of Visual Telemetry:** Transcripts could not show whether candidates read from a script or maintained camera eye contact.
+* **Single Metric Blurring:** Merging vocal pace, filler words, and content into one score hid whether the candidate had delivery problems or topical content issues.
 
-### E. Unified 3-Layer Dashboard Workflow
-1. **Telemetry Aggregation:** Frontend calls `/api/progress/placement-readiness`.
-2. **Matrix Assembly:** Computes readiness status across all 4 rounds based on latest completed attempts.
-3. **Trendline Population:** Loads historical timeline points from `/api/progress/jam`, `/api/progress/technical`, `/api/progress/guesstimate`, and `/api/progress/hr`.
-4. **History Federation:** Combines all round sessions into chronological table with status badges and dossier routing.
+#### 2. How the New Features Solved It
+* **WhisperX Word-Level Forced Alignment:** Synchronizes every spoken word to exact millisecond timestamps.
+* **Silero VAD Silence Engine:** Detects pauses (>1.2s) and micro-hesitations independently of ambient background noise.
+* **Pacing Zones:** Automatically categorizes speech into *Rushing (>165 WPM)*, *Optimal (130–160 WPM)*, and *Hesitant (<120 WPM)*.
+* **MediaPipe Gaze & Posture Tracking:** Computes eye-contact percentage and head-drift vectors strictly during speech segments.
+* **Synchronized Audio Dossier:** `/analysis/{id}` visualizes the waveform, filler word markers, and gaze trends on an interactive timeline.
+
+#### 3. Round 1 Workflow Diagram
+```mermaid
+flowchart TD
+    Start([Candidate Enters JAM Studio]) --> SelectTopic[Fetch Random / Curated Topic]
+    SelectTopic --> RecordAudio[Candidate Speaks for 60 Seconds]
+    RecordAudio --> Ingest[POST /api/analysis/record]
+    
+    subgraph Deterministic Processing
+        Ingest --> WhisperX[WhisperX Forced Alignment\nWord-Level Timestamps]
+        Ingest --> SileroVAD[Silero Voice Activity Detection\nPause Boundaries & Silence Ratio]
+        Ingest --> MediaPipe[OpenCV / MediaPipe\nGaze Vector & Posture Drift]
+    end
+
+    subgraph Telemetry & Metrics Engine
+        WhisperX --> CalcWPM[Compute Rolling WPM & Pacing Zone\nOptimal: 130-160 WPM]
+        WhisperX --> CalcFiller[Identify Filler Words\num, uh, like, basically]
+        SileroVAD --> CalcPause[Compute Pause Durations & Freezes]
+        MediaPipe --> CalcEye[Compute Eye Contact % strictly during speech]
+    end
+
+    subgraph Content Evaluation
+        WhisperX --> LLMEval[LLM Structure Scorer\nOpening Hook, Flow, Conclusion]
+        LLMEval --> QuoteCheck[Verify Evidence Quotes are exact substrings]
+    end
+
+    CalcWPM --> Consolidate[Persist to SessionAnalysis Table]
+    CalcFiller --> Consolidate
+    CalcPause --> Consolidate
+    CalcEye --> Consolidate
+    QuoteCheck --> Consolidate
+
+    Consolidate --> RenderDossier[Render /analysis/:id Dossier\nWaveform Timeline + Video Sync]
+
+    style RecordAudio fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    style WhisperX fill:#0d9488,stroke:#115e59,color:#fff
+    style SileroVAD fill:#059669,stroke:#065f46,color:#fff
+    style MediaPipe fill:#6366f1,stroke:#4338ca,color:#fff
+    style RenderDossier fill:#0284c7,stroke:#0369a1,color:#fff
+```
+
+---
+
+### B. Round 2: Technical Interview (Architecture & Conciseness)
+
+#### 1. Why the Previous Approach Failed
+* **The "Rambling" Exploitation:** Students often talk in circles when unsure of an architecture answer, hoping keyword repetition will fool the interviewer. Traditional LLM rubrics gave high scores to verbose answers because keywords were present.
+* **Jargon Without Intuition:** Candidates memorized textbook definitions (e.g., ACID properties or CAP theorem) without understanding practical application or trade-offs.
+* **Monolithic Text Appraisal:** Evaluators scored the entire response as a single block without showing the candidate where they should have concluded.
+
+#### 2. How the New Features Solved It
+* **Anti-Rambling Penalty & SNR Metric:** Computes the Signal-to-Noise Ratio (conciseness percentage) and penalizes redundant statements.
+* **Sentence-Level Conclusion Checkpoint:** Identifies the exact sentence where the candidate answered the core challenge, highlighting the subsequent rambling sentences in red.
+* **Jargon vs. Understanding Classifier:** Flags ungrounded buzzwords; rewards concrete trade-offs (e.g., latency vs. consistency, write-heavy vs. read-heavy caching).
+* **Interactive Technical Dossier:** `/technical/report/{id}` renders architecture scores, conciseness metrics, sentence-by-sentence analysis, and an optimized rewrite script.
+
+#### 3. Round 2 Workflow Diagram
+```mermaid
+flowchart TD
+    Start([Candidate Enters Tech Studio]) --> Config[Select Domain: Backend, ML, DevOps, Frontend\nSelect Seniority: Junior, Mid, Senior, Lead]
+    Config --> Prompt[Generate Real-World Engineering Scenario\ne.g., Stripe Idempotency / High-Throughput Ingestion]
+    Prompt --> CandidateAns[Candidate Articulates Architecture Solution]
+    CandidateAns --> Ingest[POST /api/technical/answer]
+
+    subgraph Evaluation Pipeline
+        Ingest --> SentSplit[Sentence-Level Segmentation]
+        SentSplit --> CoreAnswer[Detect Core Architecture Concepts]
+        CoreAnswer --> SNR[Calculate Conciseness &\nSignal-to-Noise Ratio]
+        SentSplit --> RambleDetect[Anti-Rambling Engine:\nIdentify Circular Loops]
+        SentSplit --> ConclusionPt[Identify Optimal Conclusion Sentence Checkpoint]
+        SentSplit --> JargonAudit[Jargon vs. Understanding Classifier:\nFlag Unexplained Buzzwords]
+    end
+
+    subgraph Scoring & Synthesis
+        SNR --> ArchScore[Compute Architecture Score /100]
+        RambleDetect --> RambleRate[Compute Rambling Rate %]
+        JargonAudit --> IntuitionScore[Intuition & Trade-Off Score]
+        ConclusionPt --> ModelScript[Generate 45-Second Concise Model Script]
+    end
+
+    ArchScore --> Save[Commit to technical_sessions Table]
+    RambleRate --> Save
+    IntuitionScore --> Save
+    ModelScript --> Save
+
+    Save --> Dossier[Render /technical/report/:id Dossier\nSentence Breakdown + Conclusion Checkpoint]
+
+    style CandidateAns fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style RambleDetect fill:#ef4444,stroke:#991b1b,color:#fff
+    style ConclusionPt fill:#10b981,stroke:#047857,color:#fff
+    style Dossier fill:#6366f1,stroke:#4338ca,color:#fff
+```
+
+---
+
+### C. Round 3: Guesstimate & Market Sizing (MECE & Math Engine)
+
+#### 1. Why the Previous Approach Failed
+* **LLM Math Hallucination:** Relying on LLMs to grade quantitative market sizing resulted in hallucinated arithmetic corrections, missing candidate calculation errors, or validating impossible order-of-magnitude estimates.
+* **Unstructured Reasoning:** Candidates provided stream-of-consciousness narratives without a structured tree, making it impossible to separate calculation errors from conceptual modeling errors.
+* **Absence of Benchmark Grounding:** Solutions were graded on superficial eloquence without checking whether the final estimate was within a realistic industry range.
+
+#### 2. How the New Features Solved It
+* **Interactive MECE Decomposition Tree:** Requires candidates to segment problems into structured, non-overlapping branches (e.g., Population $\to$ Demographic Target $\to$ Penetration $\to$ Replacement Frequency).
+* **Deterministic Symbolic Math Sanity Engine:** Programmatically computes declared equations, catching arithmetic mistakes without LLM guesswork.
+* **Empirical Market Benchmark Verification:** Compares candidate answers against verified industry bounds (e.g., $80M–$120M target range).
+* **Guesstimate Dossier:** `/guesstimate/report/{id}` renders the visual MECE tree, step-by-step arithmetic verification, and assumption sensitivity analysis.
+
+#### 3. Round 3 Workflow Diagram
+```mermaid
+flowchart TD
+    Start([Candidate Enters Guesstimate Studio]) --> PickCase[Select Category: Market Sizing, Volume, Revenue\nSelect Tier: Foundation, Intermediate, Advanced]
+    PickCase --> CasePrompt[Present Estimation Problem\ne.g., Annual EV Charger Demand in Urban Tier-1]
+    CasePrompt --> Decompose[Candidate Builds MECE Tree Branches]
+    Decompose --> StateAssumptions[Candidate Declares Population, Penetration & Units]
+    StateAssumptions --> CalcResult[Candidate Calculates Final Value]
+    CalcResult --> Ingest[POST /api/guesstimate/answer]
+
+    subgraph Deterministic Math Engine
+        Ingest --> ExtractEq[Extract Variables & Equations]
+        ExtractEq --> SymbolicMath[Symbolic Computation Engine\nRe-calculate step-by-step products]
+        SymbolicMath --> SanityCheck{Math Matches Candidate?}
+        SanityCheck -->|Match| MathPass[Math Sanity: 100% Passed]
+        SanityCheck -->|Mismatch| MathFail[Math Sanity Penalty: Pinpoint Arithmetic Step]
+    end
+
+    subgraph MECE Structure Evaluator
+        Ingest --> LLM_MECE[Evaluate Mutually Exclusive & Collectively Exhaustive Properties]
+        LLM_MECE --> ProxyAudit[Validate Proxy Assumption Feasibility]
+    end
+
+    subgraph Industry Benchmark Engine
+        Ingest --> BenchmarkRange[Load Empirical Range: e.g., 40k - 60k Units / $80M - $120M]
+        BenchmarkRange --> OrderOfMag[Check Order of Magnitude Feasibility]
+    end
+
+    MathPass --> Consolidate[Persist to guesstimate_cases Table]
+    MathFail --> Consolidate
+    ProxyAudit --> Consolidate
+    OrderOfMag --> Consolidate
+
+    Consolidate --> RenderReport[Render /guesstimate/report/:id Dossier\nVisual MECE Tree + Math Audit + Benchmark Range]
+
+    style Decompose fill:#10b981,stroke:#047857,color:#fff
+    style SymbolicMath fill:#059669,stroke:#065f46,color:#fff
+    style RenderReport fill:#047857,stroke:#065f46,color:#fff
+```
+
+---
+
+### D. Round 4: HR & Behavioral Interview (STAR Coach & Personal Ownership)
+
+#### 1. Why the Previous Approach Failed
+* **The "We" Dispersion Trap:** Candidates habitually answered behavioral prompts using passive plural pronouns ("We decided...", "Our team resolved..."), preventing interviewers from assessing individual contribution.
+* **Absence of Measurable Results:** Answers frequently omitted quantifiable business outcomes, offering vague platitudes like "Everything went smoothly."
+* **Dataset Bloat & Question Redundancy:** A raw dataset of 2.5 million rows (`cleaned.json`, 422 MB) contained only 40 unique canonical questions repeated ~62,500 times each, causing memory bloat and unstructured question delivery.
+* **Rigid Static Scripts:** Static questionnaires lacked adaptive pressure to follow up when candidates omitted critical STAR components.
+
+#### 2. How the New Features Solved It
+* **Deduplicated 40-Question Database Bank:** Extracted and deduplicated 40 canonical questions across 8 core competencies (`Adaptability`, `Conflict Resolution`, `Leadership`, `Team Collaboration`, `Culture Fit`, `Motivation`, `Career Goals`, `Work Style`) with seeded rubrics in `hr_questions`.
+* **Personal Ownership ("I" vs. "We" Ratio):** Measures the ratio of first-person singular action statements against collective phrasing to verify candidate agency.
+* **STAR Quadrant Classifier:** Evaluates Situation, Task, Action, and Result coverage independently from qualitative delivery.
+* **Adaptive Single Follow-up State Machine:** Dynamically probes missing STAR elements with at most one targeted follow-up question per main prompt.
+* **Behavioral Dossier:** `/hr/report/{id}` renders the STAR quadrant breakdown, personal agency score, green/red flag feedback, and an illustrative star response script.
+
+#### 3. Round 4 Workflow Diagram
+```mermaid
+flowchart TD
+    Start([Candidate Enters HR Studio]) --> TargetProfile[Input Target Role & Target Company\ne.g., Engineering Lead at Atlassian]
+    TargetProfile --> QueryDB[Query hr_questions DB Table\nFetch Balanced Competency Set]
+    QueryDB --> AskMainQ[Interviewer Presents Main Behavioral Question]
+    AskMainQ --> CandidateAnswer[Candidate Articulates Spoken or Written Response]
+    CandidateAnswer --> Ingest[POST /api/hr/answer]
+
+    subgraph STAR & Ownership Evaluator
+        Ingest --> ClassifySTAR[STAR Classifier:\nExtract Situation, Task, Action, Result Segments]
+        Ingest --> AgencyScorer[Personal Agency Scorer:\nMeasure 'I' vs. 'We' Pronoun Ownership Ratio]
+        Ingest --> MetricDetect[Quantifiable Metric Detector:\nIdentify Concrete Business Impact & Numbers]
+    end
+
+    subgraph Adaptive State Machine
+        ClassifySTAR --> CompletenessCheck{All 4 STAR Quadrants Present?}
+        CompletenessCheck -->|No & Follow-up Not Used| TriggerFollowUp[Generate 1 Targeted Follow-up:\ne.g., 'What was your specific individual action and the measurable outcome?']
+        CompletenessCheck -->|Yes OR Follow-up Used| ConcludeStage[Mark Question Complete -> Advance to Next Competency]
+    end
+
+    TriggerFollowUp --> AskFollowUp[Interviewer Asks Follow-up Question]
+    AskFollowUp --> CandidateAnswer
+
+    ConcludeStage --> Aggregate[Compute Final Behavioral Fit Score]
+    AgencyScorer --> Aggregate
+    MetricDetect --> Aggregate
+
+    Aggregate --> SaveDB[Persist to hr_interviews Table]
+    SaveDB --> Dossier[Render /hr/report/:id Dossier\nSTAR Quadrants + Ownership Meter + Illustrative Star Script]
+
+    style CandidateAnswer fill:#f59e0b,stroke:#b45309,color:#fff
+    style AgencyScorer fill:#d97706,stroke:#b45309,color:#fff
+    style TriggerFollowUp fill:#ef4444,stroke:#991b1b,color:#fff
+    style Dossier fill:#b45309,stroke:#78350f,color:#fff
+```
+
+---
+
+### E. 3-Layer Unified Placement Readiness Dashboard
+
+#### 1. Why the Previous Approach Failed
+* **The Single-Score Fallacy:** Attempting to compress vocal fluency, architectural design, market sizing, and behavioral fitness into a single composite score obscured critical candidate weaknesses.
+* **Fragmented Round Silos:** Candidates had to manually jump between disconnected round pages with no unified placement preparation view.
+* **Misleading Hiring Claims:** Absolute "hire/no-hire" labels created false expectations rather than serving as actionable preparation feedback.
+
+#### 2. How the New Features Solved It
+* **Layer 1: Placement Readiness Matrix:** Four independent round cards displaying specialized metrics (JAM delivery, Tech architecture, Guesstimate MECE, HR behavioral fit) without score-blurring.
+* **Layer 2: Multi-Round Longitudinal Trajectories:** Historical skill trendlines tracking performance against calibrated target thresholds (Baseline 70% / Target 85%).
+* **Layer 3: Cross-Round Session History:** Chronological log of attempts with direct links to comprehensive dossiers (`/analysis/{id}`, `/technical/report/{id}`, `/guesstimate/report/{id}`, `/hr/report/{id}`).
+
+#### 3. Dashboard Aggregation Workflow Diagram
+```mermaid
+flowchart TD
+    Candidate[Candidate Navigates to Dashboard] --> FetchData[GET /api/progress/placement-readiness]
+
+    subgraph Backend Aggregation Pipeline
+        FetchData --> QueryJAM[Query Latest JAM Sessions\nExtract WPM, Clarity & Eye Contact]
+        FetchData --> QueryTech[Query Latest Technical Sessions\nExtract Architecture Score & Conciseness]
+        FetchData --> QueryGuest[Query Latest Guesstimate Cases\nExtract MECE Score & Math Sanity]
+        FetchData --> QueryHR[Query Latest HR Interviews\nExtract STAR Score & Agency Ownership]
+    end
+
+    subgraph Layer 1: Readiness Matrix
+        QueryJAM --> Card1[Card 1: JAM Fluency\nPrimary: Clarity 84.5% | Sec: 142 WPM, 88% Gaze]
+        QueryTech --> Card2[Card 2: Technical Interview\nPrimary: Architecture 88% | Sec: 86% Conciseness]
+        QueryGuest --> Card3[Card 3: Guesstimate Sizing\nPrimary: MECE 85% | Sec: 90% Tree, 85% Math]
+        QueryHR --> Card4[Card 4: HR Behavioral\nPrimary: Fit 91% | Sec: 95% STAR, 88% Ownership]
+    end
+
+    subgraph Layer 2: Longitudinal Timelines
+        FetchData --> TrendTech[Technical Rigor Trajectory\nTarget 85% & Baseline 70% Bands]
+        FetchData --> TrendGuest[MECE Decomposition Trajectory\nTarget 85% & Baseline 70% Bands]
+        FetchData --> TrendHR[STAR Behavioral Trajectory\nTarget 85% & Baseline 70% Bands]
+    end
+
+    subgraph Layer 3: Unified Session Audit
+        FetchData --> HistTable[Federated Session Table\nRound Badges + Scores + Direct Dossier Links]
+    end
+
+    Card1 --> Cockpit[Render Unified Dashboard UI]
+    Card2 --> Cockpit
+    Card3 --> Cockpit
+    Card4 --> Cockpit
+    TrendTech --> Cockpit
+    TrendGuest --> Cockpit
+    TrendHR --> Cockpit
+    HistTable --> Cockpit
+
+    style Cockpit fill:#0284c7,stroke:#0369a1,color:#fff
+    style Card1 fill:#3b82f6,stroke:#1d4ed8,color:#fff
+    style Card2 fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style Card3 fill:#10b981,stroke:#047857,color:#fff
+    style Card4 fill:#f59e0b,stroke:#b45309,color:#fff
+```
 
 ---
 
 ## 5. Data Contracts and Database Schema
 
 ### Database Schema (SQLAlchemy Models)
-* **`users`:** User authentication, credentials, email, timestamps.
-* **`sessions`:** Base practice sessions linking user ID, module type, audio file paths, status, timestamps.
-* **`transcriptions`:** Raw text, Whisper confidence, word-level JSON timestamps.
-* **`session_analyses`:** JAM-specific delivery metrics (WPM, fillers, pause counts, clarity score, gaze score).
-* **`technical_sessions`:** Role, seniority, architecture scores, conciseness, rambling rate, jargon penalty.
-* **`guesstimate_cases`:** Category, target estimation, MECE tree JSON, mathematical sanity flags, final estimate.
-* **`hr_interviews`:** Target company, target role, conversation state machine JSON, overall STAR score, ownership score.
-* **`hr_questions`:** 40 canonical questions across 8 categories, target competency, green flags, red flags, sample follow-ups.
+
+```mermaid
+erDiagram
+    users ||--o{ sessions : owns
+    users ||--o{ guesstimate_cases : owns
+    users ||--o{ hr_interviews : owns
+    
+    sessions ||--o| transcriptions : contains
+    sessions ||--o| session_analyses : generates
+    sessions ||--o| technical_sessions : evaluates
+
+    hr_questions ||--o{ hr_interviews : informs
+
+    users {
+        int id PK
+        string email UK
+        string hashed_password
+        string full_name
+        datetime created_at
+    }
+
+    sessions {
+        int id PK
+        int user_id FK
+        string session_type
+        string audio_path
+        string video_path
+        string status
+        datetime created_at
+    }
+
+    transcriptions {
+        int id PK
+        int session_id FK
+        text raw_text
+        float confidence
+        json word_timestamps
+    }
+
+    session_analyses {
+        int id PK
+        int session_id FK
+        float wpm
+        int filler_count
+        int pause_count
+        float clarity_score
+        float eye_contact_score
+    }
+
+    technical_sessions {
+        int id PK
+        int session_id FK
+        string role
+        string seniority
+        float architecture_score
+        float conciseness_score
+        float rambling_rate
+        json feedback_breakdown
+    }
+
+    guesstimate_cases {
+        int id PK
+        int user_id FK
+        string category
+        float mece_score
+        float math_score
+        json tree_branches
+        float final_estimate
+    }
+
+    hr_questions {
+        int id PK
+        string category
+        text question_text
+        json green_flags
+        json red_flags
+        string sample_follow_up
+    }
+
+    hr_interviews {
+        int id PK
+        int user_id FK
+        string target_role
+        string target_company
+        float star_score
+        float personal_ownership_score
+        float specificity_score
+        json conversation_history
+    }
+```
 
 ### Placement Readiness Contract (`/api/progress/placement-readiness`)
 ```json
@@ -244,13 +637,127 @@ SpeakFlow employs a decoupled, multi-tiered pipeline architecture where the back
 
 ---
 
-## 7. Phased Implementation Plan & Current Status
+## 7. Phased Implementation Plan & Verification Matrix
 
-| Phase | Description | Deliverables | Status |
+| Phase | Description | Deliverables | Verification Status |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | JAM Fluency & Speech Analysis | Whisper transcription, VAD silence detection, OpenCV gaze tracking, 60s studio, timeline analysis dossier. | **100% Completed** |
-| **Phase 2** | Technical Interview Studio | Role-based tracks, conciseness scorer, anti-rambling penalty, jargon detector, sentence-level analysis report. | **100% Completed** |
-| **Phase 3** | Guesstimate & Market Sizing | MECE decomposition tree, symbolic math engine, proxy range validator, guesstimate studio and report. | **100% Completed** |
-| **Phase 4** | HR & Behavioral Module | 40-question database seed (`hr_questions`), STAR quadrant analyzer, "I" ownership evaluator, adaptive follow-up state machine, studio & dossier. | **100% Completed** |
-| **Phase 5** | 3-Layer Placement Dashboard | Layer 1 Readiness Matrix, Layer 2 Longitudinal Trajectories with benchmark thresholds, Layer 3 unified attempt history, persistent logging. | **100% Completed** |
-| **Phase 6** | E2E Acceptance & Production Polish | End-to-end multi-round validation test suite (`100% PASSED`), rotation logging handlers, clean Vite production build. | **100% Completed** |
+| **Phase 1** | JAM Fluency & Speech Analysis | WhisperX forced alignment, Silero VAD pause detection, OpenCV gaze tracking, 60s studio, timeline analysis dossier. | **100% Verified** |
+| **Phase 2** | Technical Interview Studio | Role-based tracks, conciseness scorer, anti-rambling penalty, jargon detector, sentence-level analysis report. | **100% Verified** |
+| **Phase 3** | Guesstimate & Market Sizing | MECE decomposition tree, symbolic math engine, proxy range validator, guesstimate studio and report. | **100% Verified** |
+| **Phase 4** | HR & Behavioral Module | 40-question database seed (`hr_questions`), STAR quadrant analyzer, "I" ownership evaluator, adaptive follow-up state machine, studio & dossier. | **100% Verified** |
+| **Phase 5** | 3-Layer Placement Dashboard | Layer 1 Readiness Matrix, Layer 2 Longitudinal Trajectories with benchmark thresholds, Layer 3 unified attempt history, persistent logging. | **100% Verified** |
+| **Phase 6** | Acceptance Suite Validation | Automated end-to-end multi-round validation test suite running across all 4 rounds and 3 dashboard layers. | **100% Passed (4/4 Rounds)** |
+
+---
+
+## 8. Architectural Evolution: Post-Mortem & Comprehensive Module Failure Analysis
+
+### A. Failure Analysis of the Initial Approach (Why the Java + Python Dual-Service Model Failed)
+
+The initial architecture proposed a **Java Spring Boot orchestrator** coupled to an external **Python speech service** and a secondary LLM layer. During development, this approach encountered several critical bottlenecks:
+
+```mermaid
+graph TD
+    subgraph Initial Failed Approach
+        A1[React Frontend] -->|Multipart Audio| B1[Java Spring Boot]
+        B1 -->|HTTP Re-stream Overhead| C1[Python FastAPI WhisperX]
+        C1 -->|Latency & Network Gaps| B1
+        B1 -->|Sync LLM Blocking| D1[Spring AI Evaluator]
+        D1 -->|String Substring Checks| B1
+        B1 -->|Complex Multi-Hop Sync| E1[PostgreSQL]
+    end
+    
+    style B1 fill:#ef4444,stroke:#991b1b,color:#fff
+    style C1 fill:#f59e0b,stroke:#b45309,color:#fff
+```
+
+1. **Dual-Service Latency & Network Overhead**: Streaming high-bitrate media from React to Spring Boot, then re-streaming it over internal HTTP to a Python FastAPI service, introduced double serialization, network buffering, and connection timeout risks during 60-second audio bursts.
+2. **Double Machine Learning Maintenance Burden**: Splitting ML logic between Python (speech/DSP) and Java (Spring AI) created fragmented dependency environments, making local execution and deployment unnecessarily complex.
+3. **Rigid Scripted Interview Flow**: The initial static rubric pipeline (`PRESENT` vs. `MISSING`) couldn't handle real-time conversational state transitions, resume grounding, or adaptive multi-turn pushback.
+4. **Lack of Visual & Prosody Grounding**: The original approach evaluated transcripts purely as plain text, missing physical confidence signals (pitch dynamics, uptalk vs. decisive drops, gaze alignment, and nervous gestures).
+
+---
+
+### B. Current Production Architecture (Unified FastAPI + Deterministic ML + Bounded LLM)
+
+The platform was consolidated into a unified, high-performance architecture:
+
+```mermaid
+graph TD
+    subgraph Current Unified Architecture (SpeakFlow v2.0)
+        Client[React 18 + Vite Cockpit] -->|Direct JWT REST & Audio Stream| API[FastAPI Unified Backend]
+        
+        API -->|Deterministic DSP & Speech| DSP[Faster-Whisper + Silero VAD]
+        API -->|Affective Visual Analytics| CV[MediaPipe FaceMesh & Pose]
+        API -->|Symbolic Verification| MATH[Deterministic Math Engine]
+        
+        API -->|Multi-Round State Graphs| State[Round State Machines & Evaluators]
+        
+        State -->|Grounded Rubric Evaluation| LLM[Bounded LLM Evaluator\nStrict Substring Verification]
+        
+        API -->|Sandboxed Profiles & Telemetry| DB[(PostgreSQL 17 / SQLite Fallback\nSQLAlchemy ORM)]
+        API -->|Persistent Audit Logs| LOGS[(RotatingFileHandlers\nbackend/logs/)]
+    end
+
+    style API fill:#10b981,stroke:#047857,color:#fff
+    style State fill:#6366f1,stroke:#4338ca,color:#fff
+    style DB fill:#0ea5e9,stroke:#0284c7,color:#fff
+    style LOGS fill:#334155,stroke:#1e293b,color:#fff
+```
+
+---
+
+### C. Architectural Comparison Matrix
+
+| Architectural Dimension | Initial Approach (Proposed) | Current Production State |
+| :--- | :--- | :--- |
+| **Backend Layer** | Java Spring Boot (Layer 3) + Python FastAPI (Layer 1) | **Unified Python FastAPI (Async ASGI)** |
+| **Speech & Audio DSP** | WhisperX + Silero via HTTP inter-service call | **Native Faster-Whisper + Silero VAD in FastAPI pipeline** |
+| **Visual Multimodal** | None (Transcripts only) | **MediaPipe FaceMesh & Posture tracking strictly during speech** |
+| **Technical Interview** | Generic rubric presence | **Conciseness (SNR), Anti-Rambling, Jargon vs. Intuition & Sentence Checkpoints** |
+| **Guesstimate Round** | Subjective text evaluation | **Interactive MECE Tree + Deterministic Symbolic Math Engine** |
+| **HR Behavioral Round** | Rigid static single follow-up logic | **40-Question Deduplicated DB Bank + STAR Coach + 'I' Ownership Meter** |
+| **Dashboard Evaluation** | Single generic radar score | **3-Layer Unified Placement Matrix without score-blurring** |
+| **Containerization / DB**| Proposed multi-service setup | **PostgreSQL with automatic resilient SQLite fallback + Rotating File Logs** |
+
+---
+
+### D. End-to-End Interview Execution Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Candidate as Student Candidate
+    participant UI as React 18 Frontend
+    participant API as FastAPI Backend
+    participant Engine as Deterministic Engines (VAD/Whisper/Math)
+    participant LLM as Bounded LLM Evaluator
+    participant DB as PostgreSQL / SQLite Fallback
+    participant Log as Persistent Log Handlers
+
+    Candidate->>UI: Selects Round (e.g., HR Behavioral)
+    UI->>API: POST /api/hr/start (role, company)
+    API->>DB: Query hr_questions (category-balanced)
+    DB-->>API: Returns 40-question curated prompt
+    API-->>UI: Presents Behavioral Prompt
+
+    Candidate->>UI: Articulates Answer (Audio / Text)
+    UI->>API: POST /api/hr/answer (multipart audio/text)
+    
+    API->>Engine: Deterministic Speech Alignment (WhisperX / VAD)
+    Engine-->>API: Verified Transcript + Pauses + WPM
+
+    API->>LLM: Evaluate STAR Coverage & Personal "I" Ownership
+    LLM-->>API: Structured Evaluation (Situation, Task, Action, Result, "I" Ratio)
+
+    alt Missing Critical STAR Quadrant
+        API-->>UI: Adaptive Follow-up Prompt (Max 1 per question)
+        Candidate->>UI: Articulates Follow-up Answer
+        UI->>API: POST /api/hr/answer
+    end
+
+    API->>DB: Commit Session Records & Metric Rows
+    API->>Log: Append to speakflow.log & acceptance_suite.log
+    API-->>UI: Complete Evaluation Payload
+    UI->>Candidate: Renders Interactive Dossier & 3-Layer Dashboard
+```

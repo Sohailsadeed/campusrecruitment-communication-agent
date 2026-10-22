@@ -59,6 +59,12 @@ class Session(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    hr_detail: Mapped[Optional["HRInterview"]] = relationship(  # type: ignore[name-defined]
+        "HRInterview",
+        back_populates="session",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
 
 class Transcription(Base):

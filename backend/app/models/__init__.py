@@ -1,6 +1,7 @@
 """SQLAlchemy ORM models."""
 from .feedback import AIFeedback
 from .guesstimate import GuesstimateCase
+from .hr import HRInterview
 from .session import Session as SessionModel, SessionAnalysis, Transcription
 from .technical import TechnicalInterview
 from .user import User
@@ -13,4 +14,5 @@ __all__ = [
     "AIFeedback",
     "TechnicalInterview",
     "GuesstimateCase",
+    "HRInterview",
 ]

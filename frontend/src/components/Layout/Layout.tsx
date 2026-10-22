@@ -12,6 +12,7 @@ export default function Layout() {
     { path: "/record", label: "Live JAM Session", icon: "sensors", pulse: true },
     { path: "/technical", label: "Technical Drill", icon: "terminal" },
     { path: "/guesstimate", label: "Guesstimate Sizing", icon: "query_stats" },
+    { path: "/hr", label: "HR Behavioral", icon: "diversity_3" },
     { path: "/dashboard", label: "Pattern & Progress", icon: "insights" },
   ];
 

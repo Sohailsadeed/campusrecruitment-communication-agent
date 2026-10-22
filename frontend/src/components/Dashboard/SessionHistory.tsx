@@ -67,6 +67,11 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                       Guesstimate
                     </span>
                   )}
+                  {s.round_type === "hr" && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-primary/15 text-primary border border-primary/30 uppercase tracking-wider">
+                      HR Behavioral
+                    </span>
+                  )}
                   <StatusBadge status={s.status} />
                 </div>
                 <div className="text-xs text-outline">
@@ -81,7 +86,7 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                   <span className="font-medium text-secondary">
                     {Math.round(s.duration_seconds)}s
                   </span>{" "}
-                  {s.round_type === "technical" || s.round_type === "guesstimate" ? "drill" : "take"}
+                  {s.round_type === "technical" || s.round_type === "guesstimate" || s.round_type === "hr" ? "drill" : "take"}
                 </div>
               </div>
 
@@ -89,7 +94,9 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                 {s.status === "in_progress" ? (
                   <Link
                     to={
-                      s.round_type === "guesstimate"
+                      s.round_type === "hr"
+                        ? `/hr/${s.id}`
+                        : s.round_type === "guesstimate"
                         ? `/guesstimate/${s.id}`
                         : s.round_type === "technical"
                         ? `/technical/${s.id}`
@@ -102,7 +109,9 @@ export default function SessionHistory({ sessions }: SessionHistoryProps) {
                 ) : (
                   <Link
                     to={
-                      s.round_type === "guesstimate"
+                      s.round_type === "hr"
+                        ? `/hr/report/${s.id}`
+                        : s.round_type === "guesstimate"
                         ? `/guesstimate/report/${s.id}`
                         : s.round_type === "technical"
                         ? `/technical/report/${s.id}`

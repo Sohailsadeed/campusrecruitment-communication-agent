@@ -224,8 +224,8 @@ export default function HomePage() {
               <span>Avg 88 pts</span>
             </div>
             <button
-              onClick={() => handleStartWithPreset("hr", "Tell me about a difficult disagreement you had with a team lead and how you resolved it.")}
-              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm"
+              onClick={() => navigate("/hr")}
+              className="w-full py-2.5 px-4 rounded-lg bg-surface-container-high group-hover:bg-primary group-hover:text-on-primary font-headline-sm text-xs font-semibold text-on-surface transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               type="button"
             >
               <span>Start HR Drill</span>

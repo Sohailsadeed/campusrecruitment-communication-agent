@@ -9,6 +9,8 @@ import TechnicalStudio from "./pages/technical/TechnicalStudio";
 import TechnicalReport from "./pages/technical/TechnicalReport";
 import GuesstimateStudio from "./pages/guesstimate/GuesstimateStudio";
 import GuesstimateReport from "./pages/guesstimate/GuesstimateReport";
+import HRStudio from "./pages/hr/HRStudio";
+import HRReport from "./pages/hr/HRReport";
 import AuthPage from "./pages/AuthPage";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthModal from "./components/Auth/AuthModal";
@@ -53,6 +55,9 @@ export default function App() {
           <Route path="/guesstimate" element={<GuesstimateStudio />} />
           <Route path="/guesstimate/:sessionId" element={<GuesstimateStudio />} />
           <Route path="/guesstimate/report/:sessionId" element={<GuesstimateReport />} />
+          <Route path="/hr" element={<HRStudio />} />
+          <Route path="/hr/:sessionId" element={<HRStudio />} />
+          <Route path="/hr/report/:sessionId" element={<HRReport />} />
           <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/settings" element={<SettingsPage />} />

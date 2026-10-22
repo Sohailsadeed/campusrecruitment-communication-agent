@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database.engine import Base, check_and_apply_migrations, engine
 from app.models import AIFeedback, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
-from app.routes import analysis, auth, feedback, guesstimate, progress, sessions, technical
+from app.routes import analysis, auth, feedback, guesstimate, hr, progress, sessions, technical
 from config import settings
 
 logging.basicConfig(
@@ -45,6 +45,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis.router, prefix="/api/jam", tags=["JAM Round"])
     app.include_router(technical.router)
     app.include_router(guesstimate.router)
+    app.include_router(hr.router)
 
     @app.on_event("startup")
     def on_startup() -> None:

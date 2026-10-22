@@ -6,8 +6,9 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database.engine import Base, check_and_apply_migrations, engine
-from app.models import AIFeedback, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
+from app.database.engine import Base, SessionLocal, check_and_apply_migrations, engine
+from app.database.seed_hr import seed_hr_questions
+from app.models import AIFeedback, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
 from app.routes import analysis, auth, feedback, guesstimate, hr, progress, sessions, technical
 from config import settings
 
@@ -52,7 +53,9 @@ def create_app() -> FastAPI:
         logger.info("Creating database tables and applying migrations")
         Base.metadata.create_all(bind=engine)
         check_and_apply_migrations()
-        logger.info("SpeakFlow API ready with multi-round database schema")
+        with SessionLocal() as db:
+            seed_hr_questions(db)
+        logger.info("SpeakFlow API ready with multi-round database schema and HR question bank")
 
     @app.get("/")
     def root() -> dict:

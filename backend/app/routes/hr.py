@@ -15,7 +15,7 @@ from app.models.user import User
 from app.routes.auth import get_current_user
 from app.services.hr.evaluator import evaluate_hr_answer, generate_hr_report
 from app.services.hr.hr_service import pick_next_hr_question
-from app.services.hr.question_bank import get_hr_tracks, get_initial_hr_question
+from app.services.hr.question_bank import get_hr_tracks, get_initial_hr_question, query_hr_questions
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,17 @@ def get_behavioral_tracks() -> dict:
     return {"tracks": get_hr_tracks()}
 
 
+@router.get("/questions")
+def get_behavioral_questions(
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Query canonical HR & behavioral questions directly from the database."""
+    questions = query_hr_questions(db=db, category=category, difficulty=difficulty)
+    return {"count": len(questions), "questions": questions}
+
+
 @router.post("/start")
 def start_hr_interview(
     req: StartHRRequest,
@@ -49,7 +60,7 @@ def start_hr_interview(
     db: Session = Depends(get_db),
 ) -> dict:
     """Initialize a new HR & Behavioral mock interview session."""
-    q1 = get_initial_hr_question(track=req.interview_mode, company=req.target_company)
+    q1 = get_initial_hr_question(db=db, track=req.interview_mode, company=req.target_company)
 
     # Create universal Session record
     session = SessionModel(
@@ -174,6 +185,7 @@ async def submit_hr_answer(
             track=hr.interview_mode,
             company=hr.target_company,
             questions_asked=updated_questions,
+            db=db,
         )
         hr.current_question = next_q
 

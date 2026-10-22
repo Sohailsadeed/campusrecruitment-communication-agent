@@ -4,7 +4,10 @@ from typing import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+import logging
 from config import settings
+
+logger = logging.getLogger("speakflow.db")
 
 
 class Base(DeclarativeBase):
@@ -12,10 +15,30 @@ class Base(DeclarativeBase):
 
 
 engine_kwargs = {}
-if settings.database_url.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
+database_url = settings.database_url
 
-engine = create_engine(settings.database_url, **engine_kwargs)
+if database_url.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+elif database_url.startswith("postgresql"):
+    engine_kwargs["connect_args"] = {"connect_timeout": 3}
+
+try:
+    engine = create_engine(database_url, **engine_kwargs)
+    with engine.connect() as _test_conn:
+        pass
+except Exception as _exc:
+    if database_url.startswith("postgresql"):
+        logger.warning(
+            "PostgreSQL is unreachable (%s). Seamlessly falling back to local SQLite speakflow.db",
+            _exc,
+        )
+        sqlite_path = settings.upload_dir.parent / "speakflow.db"
+        database_url = f"sqlite:///{sqlite_path}"
+        engine_kwargs = {"connect_args": {"check_same_thread": False}}
+        engine = create_engine(database_url, **engine_kwargs)
+    else:
+        raise
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

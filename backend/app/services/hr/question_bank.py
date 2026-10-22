@@ -1,147 +1,93 @@
-"""Behavioral & HR question bank with rubrics for campus placement and engineering hiring."""
+"""Behavioral & HR question bank with database-backed storage and rubrics."""
+import json
+import logging
+from pathlib import Path
 import random
 from typing import Any, Dict, List, Optional
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.hr import HRQuestion
+
+logger = logging.getLogger("speakflow.hr_question_bank")
+
+QUESTIONS_JSON_PATH = Path(__file__).resolve().parent / "hr_questions.json"
 
 HR_TRACKS = [
     {
-        "id": "leadership_ownership",
-        "title": "Leadership & Personal Ownership",
+        "id": "leadership",
+        "title": "Leadership & Ownership",
         "icon": "military_tech",
-        "desc": "Demonstrating individual initiative, end-to-end accountability, and bias for action.",
-        "rubric_focus": "Evaluates 'I' vs 'we' ownership, personal conviction, and proactive problem solving without waiting for instructions.",
+        "desc": "Demonstrating individual initiative, mentoring, delegating, and end-to-end accountability.",
+        "rubric_focus": "Evaluates 'I' vs 'we' ownership, personal conviction, task delegation, and proactive problem solving.",
     },
     {
-        "id": "conflict_resilience",
-        "title": "Conflict Resolution & Collaboration",
+        "id": "conflict_resolution",
+        "title": "Conflict Resolution & Disagreement",
         "icon": "handshake",
-        "desc": "Navigating difficult disagreements with peers, seniors, or cross-functional stakeholders.",
-        "rubric_focus": "Evaluates emotional intelligence, active listening, de-escalation, and finding win-win technical consensus.",
+        "desc": "Navigating difficult disagreements with peers, seniors, managers, or stakeholders.",
+        "rubric_focus": "Evaluates emotional intelligence, active listening, de-escalation, and finding win-win objective consensus.",
     },
     {
-        "id": "failure_adaptability",
-        "title": "Failure, Mistakes & Resilience",
+        "id": "adaptability",
+        "title": "Adaptability & Resilience",
         "icon": "restart_alt",
-        "desc": "Admitting past miscalculations, taking accountability, and bouncing back with maturity.",
-        "rubric_focus": "Evaluates humility, root-cause self-awareness, and concrete corrective systems put in place.",
+        "desc": "Learning new domains quickly, responding to shifting priorities, and bouncing back from mistakes.",
+        "rubric_focus": "Evaluates humility, root-cause self-awareness, and concrete corrective adjustments.",
     },
     {
-        "id": "culture_motivation",
-        "title": "Company Motivation & Culture Fit",
+        "id": "team_collaboration",
+        "title": "Team Collaboration & Trust",
+        "icon": "groups",
+        "desc": "Building trust with teammates, cross-functional synergy, and collective delivery.",
+        "rubric_focus": "Evaluates interpersonal trust, credit sharing, and unblocking teammates.",
+    },
+    {
+        "id": "culture_fit",
+        "title": "Company Culture & Values",
         "icon": "domain",
-        "desc": "Explaining genuine organizational fit, long-term engineering vision, and ethics.",
-        "rubric_focus": "Evaluates depth of research into the company, value alignment, and intrinsic motivation.",
+        "desc": "Explaining genuine organizational fit, corporate value alignment, and team environment contributions.",
+        "rubric_focus": "Evaluates depth of research into the company, value alignment, and positive team presence.",
     },
     {
-        "id": "ambiguity_prioritization",
-        "title": "Ambiguity & Prioritization",
-        "icon": "alt_route",
-        "desc": "Thriving under shifting requirements, tight deadlines, and competing stakeholder demands.",
-        "rubric_focus": "Evaluates triage frameworks, trade-off communication, and pragmatic delivery.",
+        "id": "motivation",
+        "title": "Motivation & Drive",
+        "icon": "bolt",
+        "desc": "Demonstrating intrinsic drive, perseverance through repetitive tasks, and career passion.",
+        "rubric_focus": "Evaluates intrinsic drive, perseverance, and genuine enthusiasm for the discipline.",
+    },
+    {
+        "id": "career_goals",
+        "title": "Career Goals & Trajectory",
+        "icon": "trending_up",
+        "desc": "Articulating long-term aspirations, desired skill development, and 5-year vision.",
+        "rubric_focus": "Evaluates self-awareness, ambition, and alignment with the target role.",
+    },
+    {
+        "id": "work_style",
+        "title": "Work Style & Prioritization",
+        "icon": "schedule",
+        "desc": "Daily task organization, remote productivity, and managing competing deadlines.",
+        "rubric_focus": "Evaluates prioritization frameworks, autonomy, and structured execution.",
     },
 ]
 
-# Curated core behavioral interview question bank
-HR_QUESTIONS = [
-    # 1. Leadership & Personal Ownership
-    {
-        "id": "hr_lead_01",
-        "track": "leadership_ownership",
-        "text": "Tell me about a time you identified a major flaw or bottleneck in a project and took complete ownership to fix it without being asked.",
-        "rubric": {
-            "green_flags": ["Explicit personal agency ('I investigated', 'I drafted')", "Quantified result", "Proactive communication with team"],
-            "red_flags": ["Passive language ('We kind of decided')", "Taking credit for team's work without clear personal action", "Lack of measurable outcome"],
-        },
-    },
-    {
-        "id": "hr_lead_02",
-        "track": "leadership_ownership",
-        "text": "Describe a situation where a teammate was underperforming or missing deadlines on a critical deliverable. How did you handle it?",
-        "rubric": {
-            "green_flags": ["Direct, empathetic 1-on-1 communication", "Focus on unblocking rather than finger-pointing", "Delivering the project on time"],
-            "red_flags": ["Complaining to management immediately", "Ignoring the issue and letting project suffer", "Aggressive confrontation"],
-        },
-    },
-    {
-        "id": "hr_lead_03",
-        "track": "leadership_ownership",
-        "text": "Can you share an experience where you had to persuade peers or stakeholders to adopt your technical proposal over an alternative?",
-        "rubric": {
-            "green_flags": ["Data-driven evidence and trade-off comparison", "Respect for opposing viewpoints", "Clear post-decision alignment"],
-            "red_flags": ["Pushing authority without evidence", "Dismissing other opinions as stupid", "Grudging compromise"],
-        },
-    },
-
-    # 2. Conflict & Collaboration
-    {
-        "id": "hr_conf_01",
-        "track": "conflict_resilience",
-        "text": "Tell me about a time you strongly disagreed with a decision made by a project lead or manager. How did you communicate your dissent, and what was the outcome?",
-        "rubric": {
-            "green_flags": ["Disagree and commit mentality", "Professional framing with data/trade-offs", "Support for final team direction"],
-            "red_flags": ["Passive-aggressive resistance", "Undermining the decision behind closed doors", "Blind obedience without sharing concerns"],
-        },
-    },
-    {
-        "id": "hr_conf_02",
-        "track": "conflict_resilience",
-        "text": "Describe a scenario where you received harsh or unexpected constructive feedback on your code, design, or behavior. How did you react?",
-        "rubric": {
-            "green_flags": ["Emotional maturity and listening", "Asking clarifying questions", "Concrete behavioral or technical adjustment"],
-            "red_flags": ["Defensiveness and excuse-making", "Blaming the reviewer", "Ignoring feedback"],
-        },
-    },
-
-    # 3. Failure & Resilience
-    {
-        "id": "hr_fail_01",
-        "track": "failure_adaptability",
-        "text": "Tell me about your biggest technical or project failure. What went wrong, what was your role in the breakdown, and what did you learn?",
-        "rubric": {
-            "green_flags": ["Genuine vulnerability and accountability ('My assumption was wrong')", "Concrete post-mortem analysis", "Preventative systems created"],
-            "red_flags": ["Fake failure ('I cared too much about quality')", "Blaming teammates or third parties entirely", "No lasting takeaway"],
-        },
-    },
-    {
-        "id": "hr_fail_02",
-        "track": "failure_adaptability",
-        "text": "Describe a project where you realized halfway through that you were going to miss the deadline. How did you handle stakeholder expectations?",
-        "rubric": {
-            "green_flags": ["Early proactive communication (bad news early)", "Offering scoped-down MVP options", "Clear mitigation roadmap"],
-            "red_flags": ["Waiting until deadline day to disclose delay", "Hoping nobody notices", "Blaming external circumstances"],
-        },
-    },
-
-    # 4. Motivation & Culture Fit
-    {
-        "id": "hr_cult_01",
-        "track": "culture_motivation",
-        "text": "Why are you interested in joining our engineering team specifically, and how do our company values align with how you work best?",
-        "rubric": {
-            "green_flags": ["Specific knowledge of company's technical architecture or mission", "Genuine cultural resonance", "Clear career trajectory"],
-            "red_flags": ["Generic platitudes ('You are a market leader')", "Focus solely on compensation or brand status", "Zero specific knowledge"],
-        },
-    },
-    {
-        "id": "hr_cult_02",
-        "track": "culture_motivation",
-        "text": "Where do you see your engineering craftsmanship evolving over the next 2 to 3 years, and what environment brings out your best performance?",
-        "rubric": {
-            "green_flags": ["Self-awareness regarding growth areas", "Desire for mentorship and high-bar collaboration", "Clear goals"],
-            "red_flags": ["Unrealistic grandiosity", "Apathetic / aimless response", "Wanting to coast"],
-        },
-    },
-
-    # 5. Ambiguity & Prioritization
-    {
-        "id": "hr_ambi_01",
-        "track": "ambiguity_prioritization",
-        "text": "Tell me about a time you were tasked with building something with ambiguous, incomplete, or rapidly shifting specifications. How did you proceed?",
-        "rubric": {
-            "green_flags": ["Proactive stakeholder clarification", "Developing a phased prototype/MVP to de-risk assumptions", "Iterative validation"],
-            "red_flags": ["Paralysis by analysis", "Building in isolation without checking assumptions", "Frustrated complaining about management"],
-        },
-    },
-]
+# Track alias normalization map
+TRACK_ALIAS_MAP = {
+    "leadership_ownership": "Leadership",
+    "leadership": "Leadership",
+    "conflict_resilience": "Conflict Resolution",
+    "conflict_resolution": "Conflict Resolution",
+    "failure_adaptability": "Adaptability",
+    "adaptability": "Adaptability",
+    "team_collaboration": "Team Collaboration",
+    "culture_motivation": "Culture Fit",
+    "culture_fit": "Culture Fit",
+    "motivation": "Motivation",
+    "career_goals": "Career Goals",
+    "work_style": "Work Style",
+    "ambiguity_prioritization": "Work Style",
+}
 
 
 def get_hr_tracks() -> List[Dict[str, Any]]:
@@ -149,36 +95,149 @@ def get_hr_tracks() -> List[Dict[str, Any]]:
     return HR_TRACKS
 
 
-def get_curated_hr_questions(track: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieve questions filtered by track or all."""
-    if not track or track == "all" or track == "standard_hr":
-        return HR_QUESTIONS
-    return [q for q in HR_QUESTIONS if q["track"] == track]
+def normalize_category_name(raw: Optional[str]) -> Optional[str]:
+    """Map frontend/backend track IDs to standard DB category names."""
+    if not raw or raw in ("all", "standard_hr"):
+        return None
+    return TRACK_ALIAS_MAP.get(raw.lower(), raw)
 
 
-def get_initial_hr_question(track: str = "standard_hr", company: Optional[str] = None) -> Dict[str, Any]:
-    """Pick an appropriate opening question tailored to track and company."""
-    if track == "culture_motivation":
-        company_label = company or "our company"
-        return {
-            "id": "hr_q1_cult",
-            "track": "culture_motivation",
-            "text": f"To begin, why are you interested in joining {company_label} specifically, and how do our engineering values align with how you work best?",
-            "rubric": HR_QUESTIONS[7]["rubric"],
+def _load_fallback_questions() -> List[Dict[str, Any]]:
+    """Load questions directly from JSON file if DB is not supplied."""
+    if not QUESTIONS_JSON_PATH.exists():
+        return []
+    try:
+        with open(QUESTIONS_JSON_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.error("Error reading hr_questions.json fallback: %s", exc)
+        return []
+
+
+def query_hr_questions(
+    db: Optional[Session] = None,
+    category: Optional[str] = None,
+    difficulty: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Query questions from the database with category/difficulty filtering, falling back to JSON."""
+    normalized_cat = normalize_category_name(category)
+
+    if db is not None:
+        try:
+            stmt = select(HRQuestion)
+            if normalized_cat:
+                stmt = stmt.where(HRQuestion.category.ilike(f"%{normalized_cat}%"))
+            if difficulty and difficulty.lower() != "all":
+                stmt = stmt.where(HRQuestion.difficulty.ilike(difficulty))
+
+            results = db.scalars(stmt).all()
+            if results:
+                return [
+                    {
+                        "id": q.question_key,
+                        "track": q.category,
+                        "text": q.question_text,
+                        "difficulty": q.difficulty,
+                        "source_type": q.source_type,
+                        "keywords": q.keywords,
+                        "rubric": q.rubric,
+                    }
+                    for q in results
+                ]
+        except Exception as exc:
+            logger.warning("DB query for HR questions failed, falling back to JSON: %s", exc)
+
+    # Fallback to JSON
+    raw_list = _load_fallback_questions()
+    filtered = []
+    for item in raw_list:
+        if normalized_cat and normalized_cat.lower() not in item.get("category", "").lower():
+            continue
+        if difficulty and difficulty.lower() != "all" and item.get("difficulty", "").lower() != difficulty.lower():
+            continue
+        filtered.append({
+            "id": item.get("id"),
+            "track": item.get("category"),
+            "text": item.get("question"),
+            "difficulty": item.get("difficulty"),
+            "source_type": item.get("source_type"),
+            "keywords": item.get("keywords", []),
+            "rubric": item.get("rubric", {}),
+        })
+
+    return filtered if filtered else [
+        {
+            "id": item.get("id"),
+            "track": item.get("category"),
+            "text": item.get("question"),
+            "difficulty": item.get("difficulty"),
+            "source_type": item.get("source_type"),
+            "keywords": item.get("keywords", []),
+            "rubric": item.get("rubric", {}),
         }
-    elif track == "leadership_ownership":
-        return HR_QUESTIONS[0]
-    elif track == "conflict_resilience":
-        return HR_QUESTIONS[3]
-    elif track == "failure_adaptability":
-        return HR_QUESTIONS[5]
-    elif track == "ambiguity_prioritization":
-        return HR_QUESTIONS[9]
+        for item in raw_list
+    ]
 
-    # Standard HR defaults to an ice-breaking ownership question
-    return {
-        "id": "hr_q1_intro",
-        "track": "leadership_ownership",
-        "text": "Can you walk me through a significant project or challenge you took personal ownership of, highlighting the situation, your specific role, and the final impact?",
-        "rubric": HR_QUESTIONS[0]["rubric"],
-    }
+
+def get_initial_hr_question(
+    db: Optional[Session] = None,
+    track: str = "standard_hr",
+    company: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Retrieve an initial opening question from the database."""
+    questions = query_hr_questions(db=db, category=track)
+    if not questions:
+        # Emergency default
+        return {
+            "id": "hr_q_default",
+            "track": "Leadership",
+            "text": "Tell me about a time you led a project or team, highlighting your specific role and the outcome.",
+            "rubric": {
+                "green_flags": ["Clear STAR structure", "Active 'I' ownership", "Measurable result"],
+                "red_flags": ["Vague narrative", "Passive language", "Missing impact"],
+            },
+        }
+
+    # If company is specified and asking about culture/motivation, customize greeting prompt
+    normalized = normalize_category_name(track)
+    if normalized in ("Culture Fit", "Motivation") and company:
+        for q in questions:
+            if "company" in q["text"].lower() or "values" in q["text"].lower():
+                return {
+                    **q,
+                    "text": q["text"].replace("our company", company).replace("this role", f"the {company} role"),
+                }
+
+    return random.choice(questions)
+
+
+def get_next_hr_question(
+    db: Optional[Session] = None,
+    asked_texts: Optional[List[str]] = None,
+    preferred_track: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Pick the next question from the DB that has not yet been asked in this session."""
+    asked_set = set(t.strip().lower() for t in (asked_texts or []))
+    candidates = query_hr_questions(db=db, category=preferred_track)
+    unasked = [q for q in candidates if q["text"].strip().lower() not in asked_set]
+
+    if unasked:
+        return random.choice(unasked)
+
+    # If all in preferred track were asked, draw from all remaining DB questions
+    all_questions = query_hr_questions(db=db)
+    all_unasked = [q for q in all_questions if q["text"].strip().lower() not in asked_set]
+    if all_unasked:
+        return random.choice(all_unasked)
+
+    return None
+
+
+def get_curated_hr_questions(track: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Backwards-compatible getter for question list."""
+    return query_hr_questions(category=track)
+
+
+# Backwards compatibility export
+HR_QUESTIONS = query_hr_questions()
+

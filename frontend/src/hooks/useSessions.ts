@@ -9,6 +9,9 @@ import {
 import {
   analyzeSession,
   getAnalysis,
+  getGuesstimateProgress,
+  getHRProgress,
+  getPlacementReadiness,
   getProgressMetrics,
   getProgressSummary,
   getTechnicalProgress,
@@ -83,4 +86,26 @@ export function useTechnicalProgress() {
     queryFn: getTechnicalProgress,
   });
 }
+
+export function useGuesstimateProgress() {
+  return useQuery({
+    queryKey: ["progress", "guesstimate"],
+    queryFn: getGuesstimateProgress,
+  });
+}
+
+export function useHRProgress() {
+  return useQuery({
+    queryKey: ["progress", "hr"],
+    queryFn: getHRProgress,
+  });
+}
+
+export function usePlacementReadiness() {
+  return useQuery({
+    queryKey: ["progress", "placement-readiness"],
+    queryFn: getPlacementReadiness,
+  });
+}
+
 

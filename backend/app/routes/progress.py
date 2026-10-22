@@ -374,6 +374,14 @@ def get_placement_readiness(
     ).all()
     jam_completed = [s for s in jam_sessions if s.status == "completed" and s.analysis]
     latest_jam = jam_completed[0] if jam_completed else None
+    jam_clarity_scores = [
+        float(s.analysis.clarity_score)
+        for s in jam_completed
+        if s.analysis and s.analysis.clarity_score is not None
+    ]
+    peak_jam_score = max(jam_clarity_scores) if jam_clarity_scores else None
+    latest_jam_score = round(latest_jam.analysis.clarity_score, 1) if (latest_jam and latest_jam.analysis and latest_jam.analysis.clarity_score is not None) else None
+    is_jam_ready = bool(latest_jam_score and latest_jam_score >= 80)
 
     jam_card = {
         "key": "jam",
@@ -383,10 +391,10 @@ def get_placement_readiness(
         "completed_count": len(jam_completed),
         "latest_attempt_at": latest_jam.created_at.isoformat() if latest_jam else None,
         "latest_session_id": latest_jam.id if latest_jam else None,
-        "status": "ready" if (latest_jam and latest_jam.analysis.clarity_score >= 80) else ("in_progress" if latest_jam else "not_attempted"),
+        "status": "ready" if is_jam_ready else ("in_progress" if latest_jam else "not_attempted"),
         "primary_metric": {
             "label": "Clarity & Delivery",
-            "value": round(latest_jam.analysis.clarity_score, 1) if latest_jam else None,
+            "value": latest_jam_score,
             "unit": "/100",
         },
         "secondary_metrics": [
@@ -422,6 +430,7 @@ def get_placement_readiness(
         latest_tech.overall_score if latest_tech and latest_tech.overall_score is not None
         else (latest_tech.report.get("total_score") if latest_tech and isinstance(latest_tech.report, dict) else None)
     )
+    is_tech_ready = bool(latest_tech_score and latest_tech_score >= 75)
 
     tech_card = {
         "key": "technical",
@@ -431,7 +440,7 @@ def get_placement_readiness(
         "completed_count": len(tech_completed),
         "latest_attempt_at": latest_tech.created_at.isoformat() if latest_tech else None,
         "latest_session_id": latest_tech.id if latest_tech else None,
-        "status": "ready" if (latest_tech_score and latest_tech_score >= 75) else ("in_progress" if latest_tech else "not_attempted"),
+        "status": "ready" if is_tech_ready else ("in_progress" if latest_tech else "not_attempted"),
         "primary_metric": {
             "label": "Architecture Rigor",
             "value": round(float(latest_tech_score), 1) if latest_tech_score is not None else None,
@@ -450,7 +459,7 @@ def get_placement_readiness(
             },
             {
                 "label": "Benchmark Status",
-                "value": "Tier-1 Competitive" if (latest_tech_score and latest_tech_score >= 80) else "Developing",
+                "value": "Tier-1 Competitive" if is_tech_ready else "Developing",
                 "unit": "tier",
             },
         ],
@@ -479,6 +488,8 @@ def get_placement_readiness(
         else latest_guess_eval.get("overall_score")
     )
 
+    is_guess_ready = bool(latest_guess_score and latest_guess_score >= 75)
+
     guesstimate_card = {
         "key": "guesstimate",
         "title": "Guesstimate & Market Sizing",
@@ -487,7 +498,7 @@ def get_placement_readiness(
         "completed_count": len(guesstimate_completed),
         "latest_attempt_at": latest_guess.created_at.isoformat() if latest_guess else None,
         "latest_session_id": latest_guess.id if latest_guess else None,
-        "status": "ready" if (latest_guess_score and latest_guess_score >= 75) else ("in_progress" if latest_guess else "not_attempted"),
+        "status": "ready" if is_guess_ready else ("in_progress" if latest_guess else "not_attempted"),
         "primary_metric": {
             "label": "MECE Framework",
             "value": round(float(latest_guess_score), 1) if latest_guess_score is not None else None,
@@ -532,6 +543,7 @@ def get_placement_readiness(
         latest_hr.overall_score if latest_hr and latest_hr.overall_score is not None
         else latest_hr_report.get("total_score")
     )
+    is_hr_ready = bool(latest_hr_score and latest_hr_score >= 75)
 
     hr_card = {
         "key": "hr",
@@ -541,7 +553,7 @@ def get_placement_readiness(
         "completed_count": len(hr_completed),
         "latest_attempt_at": latest_hr.created_at.isoformat() if latest_hr else None,
         "latest_session_id": latest_hr.id if latest_hr else None,
-        "status": "ready" if (latest_hr_score and latest_hr_score >= 75) else ("in_progress" if latest_hr else "not_attempted"),
+        "status": "ready" if is_hr_ready else ("in_progress" if latest_hr else "not_attempted"),
         "primary_metric": {
             "label": "Behavioral Fit",
             "value": round(float(latest_hr_score), 1) if latest_hr_score is not None else None,

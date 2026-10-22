@@ -37,9 +37,9 @@ export default function PlacementReadinessMatrix({
         };
       case "in_progress":
         return {
-          label: "In Progress",
+          label: "Developing",
           style: "bg-secondary/15 text-secondary border-secondary/30",
-          icon: "pending",
+          icon: "trending_up",
         };
       case "not_attempted":
       default:

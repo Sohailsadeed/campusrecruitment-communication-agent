@@ -40,6 +40,10 @@ export interface TechnicalTimelinePoint {
   role: string;
   target_company?: string | null;
   score: number;
+  conciseness_score?: number | null;
+  rambling_rate?: number | null;
+  applied_understanding_score?: number | null;
+  rote_reliance_score?: number | null;
   benchmark: number;
   competitive_threshold: number;
   questions_count: number;
@@ -60,6 +64,10 @@ export interface TechnicalProgressResponse {
     completed_drills: number;
     avg_score: number;
     peak_score: number;
+    avg_conciseness?: number;
+    avg_rambling_rate?: number;
+    avg_applied_understanding?: number;
+    avg_rote_reliance?: number;
     latest_verdict: string;
   };
   competencies: TechnicalCompetencyMetric[];

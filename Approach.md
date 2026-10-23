@@ -316,7 +316,7 @@ flowchart TD
 * **Empirical Range Reality Check Diagnostic:**
   - Compares candidate's final estimate against verified consulting benchmark ranges normalized for identical geography, period, and unit.
   - Computes variance against a documented midpoint reference baseline:
-    $$\text{variance\_percent} = \left(\frac{\text{candidate\_estimate} - \text{range\_midpoint}}{\text{range\_midpoint}}\right) \times 100\%$$
+    $$\text{Variance \%} = \left(\frac{\text{Candidate Estimate} - \text{Range Midpoint}}{\text{Range Midpoint}}\right) \times 100\%$$
 * **Epistemic Humility in Candidate Branch Evidence Audit:**
   - Audits candidate branches against a 5-tier status enum with literal transcript evidence:
     - 🟢 `supported_mece`: Validated non-overlapping segment.

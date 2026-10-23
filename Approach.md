@@ -641,6 +641,55 @@ erDiagram
 
 ---
 
+### D. Autonomous Curriculum Coach Agent: Closed-Loop LangGraph State Machine
+
+While the 3-Layer Dashboard visualizes multi-round readiness, candidates frequently struggle with **curriculum paralysis**: deciding which round, rubric, or drill difficulty to prioritize on a given day. The **Autonomous Curriculum Coach Agent** solves this by converting static telemetry into a dynamic, closed-loop pedagogical journey.
+
+```mermaid
+graph TD
+    Start(["Candidate Profile / Re-Plan Trigger"]) --> Audit["Node 1: audit_history_node<br/>Aggregate Cross-Round Telemetry from progress.py"]
+    Audit --> Diagnose["Node 2: diagnose_bottlenecks_node<br/>Deterministic Rule Engine Sorting Gaps by Severity"]
+    Diagnose --> Synthesize["Node 3: synthesize_roadmap_node<br/>LLM Synthesizes Personalized 7-Day Syllabus"]
+    Synthesize --> Validate{"Node 4: validate_feasibility_node<br/>7-Day Count & Real Route Check"}
+    
+    Validate -->|Route / Count Invalid & Iterations < 2| Synthesize
+    Validate -->|Passed or Corrected| SavePlan["Commit CurriculumPlan ORM to DB (status='active')"]
+    SavePlan --> CockpitUI["Render CurriculumCoachCard on Cockpit Dashboard"]
+    
+    CockpitUI --> LaunchDrill["1-Click Drill Launcher<br/>(/record, /technical, /guesstimate, /hr)"]
+    LaunchDrill --> CompleteRound["Candidate Completes Drill Session"]
+    CompleteRound --> AutoSync["POST /api/coach/auto-sync<br/>Auto-Record Score & Advance Next Day"]
+
+    style Audit fill:#0284c7,stroke:#0369a1,color:#fff
+    style Diagnose fill:#f59e0b,stroke:#b45309,color:#fff
+    style Synthesize fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style Validate fill:#10b981,stroke:#047857,color:#fff
+    style SavePlan fill:#059669,stroke:#065f46,color:#fff
+```
+
+#### 1. Deterministic Multi-Round Telemetry Auditing
+The agent directly queries historical performance across all four specialized modules:
+* **JAM Fluency:** Evaluates speaking pace deviations (outside 135-155 WPM), filler word density (> 3/session triggers priority flag), and gaze adherence.
+* **Technical Architecture:** Scans conciseness score, rambling frequency (> 20% triggers anti-rambling focus), and rote textbook reliance vs. applied systems understanding.
+* **Consulting Guesstimate:** Audits the 4 decoupled consulting rubrics: MECE structuring (35%), proxy assumption sanity (25%), mental math flow (20%), and sanity check benchmarks (20%). Identifies order-of-magnitude slips and non-MECE branch partitions.
+* **HR & Leadership:** Audits STAR quadrant coverage and personal ownership ("I" vs. "We" agency ratio < 75%).
+* **Coverage Baseline:** Explicitly flags unattempted rounds (0 attempts) to ensure balanced campus placement calibration.
+
+#### 2. LangGraph State Machine Topology
+Implemented using LangGraph `StateGraph(CurriculumState)`:
+1. **`audit_history_node`**: Aggregates verified metrics from database sessions.
+2. **`diagnose_bottlenecks_node`**: Evaluates gap metrics against calibrated placement thresholds (85% strong hire, 75% baseline), sorting bottlenecks into `high`, `medium`, and `low` urgency tiers.
+3. **`synthesize_roadmap_node`**: LLM generates an adaptive 7-day chronological syllabus with concrete pedagogical rationales for why each drill is prescribed.
+4. **`validate_feasibility_node`**: Deterministic guardrail enforcing that all prescribed routes match live platform endpoints (`/record`, `/technical`, `/guesstimate`, `/hr`), and top bottlenecks are addressed in Days 1–2.
+5. **Conditional Edge (`route_validation`)**: Automatically re-prompts the synthesizer if validation fails (bounded to 2 iterations), otherwise falls back to a deterministic verified template.
+
+#### 3. Closed-Loop Practice & Auto-Sync Execution
+* **ORM Persistence (`curriculum_plans` Table):** Stores `target_role`, `identified_bottlenecks`, `days` array, and completion telemetry.
+* **Active Day Spotlight Card:** Highlights the active day's drill with direct 1-click execution (`Launch Prescribed Drill`) pre-routing to the target studio.
+* **Auto-Sync Engine (`POST /api/coach/auto-sync`):** Automatically detects newly submitted interview sessions created after plan generation, records candidate scores, marks the day completed, and unlocks the next day.
+
+---
+
 ## 6. Guardrails, Calibrations, and Quality Assurance
 
 * **Zero Single-Score Blurring:** Avoids compressing fundamentally distinct abilities (e.g., vocal delivery vs. distributed systems design) into an ungrounded general score.
@@ -662,6 +711,7 @@ erDiagram
 | **Phase 4** | HR & Behavioral Module | 40-question database seed (`hr_questions`), STAR quadrant analyzer, "I" ownership evaluator, adaptive follow-up state machine, studio & dossier. | **100% Verified** |
 | **Phase 5** | 3-Layer Placement Dashboard | Layer 1 Readiness Matrix, Layer 2 Longitudinal Trajectories with benchmark thresholds, Layer 3 unified attempt history, persistent logging. | **100% Verified** |
 | **Phase 6** | Acceptance Suite Validation | Automated end-to-end multi-round validation test suite running across all 4 rounds and 3 dashboard layers. | **100% Passed (4/4 Rounds)** |
+| **Phase 7** | Autonomous Curriculum Coach Agent | LangGraph 4-node cyclic state machine, multi-round historical telemetry audit from `progress.py`, deterministic bottleneck classification, adaptive 7-day personalized interview syllabus, and real-time auto-sync engine. | **100% Verified** |
 
 ---
 
@@ -733,6 +783,7 @@ graph TD
 | **Guesstimate Round** | Subjective text evaluation | **4-Rubric Consulting Architecture (35/25/20/20 Half-Up) + 5-Tier Branch Audit + Midpoint Range Gauge + 3-Tier Precedence Tornado Sensitivity** |
 | **HR Behavioral Round** | Rigid static single follow-up logic | **40-Question Deduplicated DB Bank + STAR Coach + 'I' Ownership Meter** |
 | **Dashboard Evaluation** | Single generic radar score | **3-Layer Unified Placement Matrix without score-blurring** |
+| **Curriculum Planning** | Static syllabus / no feedback loop | **Autonomous Curriculum Coach (LangGraph 4-node state graph + deterministic bottleneck audit + adaptive 7-day drill roadmap + auto-sync)** |
 | **Containerization / DB**| Proposed multi-service setup | **PostgreSQL with automatic resilient SQLite fallback + Rotating File Logs** |
 
 ---

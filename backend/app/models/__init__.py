@@ -1,4 +1,5 @@
 """SQLAlchemy ORM models."""
+from .coach import CurriculumPlan
 from .feedback import AIFeedback
 from .guesstimate import GuesstimateCase
 from .hr import HRInterview, HRQuestion
@@ -16,4 +17,5 @@ __all__ = [
     "GuesstimateCase",
     "HRInterview",
     "HRQuestion",
+    "CurriculumPlan",
 ]

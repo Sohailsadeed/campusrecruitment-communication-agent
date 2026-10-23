@@ -1,6 +1,7 @@
 import { useState } from "react";
 import StatisticsCards from "../components/Dashboard/StatisticsCards";
 import PlacementReadinessMatrix from "../components/Dashboard/PlacementReadinessMatrix";
+import CurriculumCoachCard from "../components/Dashboard/CurriculumCoachCard";
 import ProgressDashboard from "../components/Dashboard/ProgressDashboard";
 import TechnicalProgressDashboard from "../components/Dashboard/TechnicalProgressDashboard";
 import GuesstimateProgressDashboard from "../components/Dashboard/GuesstimateProgressDashboard";
@@ -107,6 +108,9 @@ export default function DashboardPage() {
         data={readinessData}
         isLoading={readinessQuery.isLoading}
       />
+
+      {/* Autonomous Curriculum Coach Agent */}
+      <CurriculumCoachCard />
 
       {/* High-Level Practice Stats Strip */}
       {summary ? <StatisticsCards summary={summary} /> : null}

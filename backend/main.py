@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database.engine import Base, SessionLocal, check_and_apply_migrations, engine
 from app.database.seed_hr import seed_hr_questions
-from app.models import AIFeedback, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
+from app.models import AIFeedback, CurriculumPlan, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
 import sys
 from logging.handlers import RotatingFileHandler
-from app.routes import analysis, auth, feedback, guesstimate, hr, progress, sessions, technical
+from app.routes import analysis, auth, coach, feedback, guesstimate, hr, progress, sessions, technical
 from config import settings
 
 # Configure structured file and console logging
@@ -81,6 +81,7 @@ def create_app() -> FastAPI:
     app.include_router(technical.router)
     app.include_router(guesstimate.router)
     app.include_router(hr.router)
+    app.include_router(coach.router)
 
     @app.on_event("startup")
     def on_startup() -> None:

@@ -297,57 +297,72 @@ flowchart TD
 
 ---
 
-### C. Round 3: Guesstimate & Market Sizing (MECE & Math Engine)
+### C. Round 3: Guesstimate & Market Sizing (Consulting MECE & Math Sanity Engine)
 
 #### 1. Why the Previous Approach Failed
 * **LLM Math Hallucination:** Relying on LLMs to grade quantitative market sizing resulted in hallucinated arithmetic corrections, missing candidate calculation errors, or validating impossible order-of-magnitude estimates.
-* **Unstructured Reasoning:** Candidates provided stream-of-consciousness narratives without a structured tree, making it impossible to separate calculation errors from conceptual modeling errors.
-* **Absence of Benchmark Grounding:** Solutions were graded on superficial eloquence without checking whether the final estimate was within a realistic industry range.
+* **Unstructured Reasoning & The Single-Score Trap:** Evaluating market sizing with a single generic score failed to separate formula decomposition defects from calculation slips or proxy insanity. A candidate could calculate arithmetic cleanly while omitting half the market pool, yet receive an uninformative composite score.
+* **Absence of Benchmark Grounding & Unit Incoherence:** Solutions were graded on superficial verbal confidence without checking whether the candidate's final estimate matched verified industry bounds in both numerical scale, geographical territory, and timeframe units (e.g. daily units vs. annual revenue).
+* **Naive Inverse-Relationship Keyword Heuristics:** Traditional sensitivity tools flagged words like "cycle" or "replacement" to infer inverse scaling, causing catastrophic errors when formulas were multiplicative or contained multi-variable shifts.
 
 #### 2. How the New Features Solved It
-* **Interactive MECE Decomposition Tree:** Requires candidates to segment problems into structured, non-overlapping branches (e.g., Population $\to$ Demographic Target $\to$ Penetration $\to$ Replacement Frequency).
-* **Deterministic Symbolic Math Sanity Engine:** Programmatically computes declared equations, catching arithmetic mistakes without LLM guesswork.
-* **Empirical Market Benchmark Verification:** Compares candidate answers against verified industry bounds (e.g., $80M–$120M target range).
-* **Guesstimate Dossier:** `/guesstimate/report/{id}` renders the visual MECE tree, step-by-step arithmetic verification, and assumption sensitivity analysis.
+* **Authoritative Four-Rubric Consulting Weighting Architecture:**
+  - Evaluates performance across four mathematically decoupled consulting competencies:
+    1. **MECE Structuring (35%):** Formula segmentation, non-overlapping boundaries, exhaustive demographic coverage.
+    2. **Proxy & Assumption Sanity (25%):** Realistic demographic proxies (e.g., household sizes, income brackets, replacement cycles) defended with explicit business rationale.
+    3. **Mental Math & Arithmetic Flow (20%):** Out-loud arithmetic flow, intelligent rounding (80/20, 1.4B, 30%), and zero order-of-magnitude errors.
+    4. **Sanity Check & Reality Validation (20%):** Macro benchmarking against GDP/capacity and identification of high-volatility drivers.
+  - **Deliberate Rounding Policy:** Employs conventional arithmetic half-up rounding ($\text{val} + 0.5 \to \lfloor \cdot \rfloor$, ensuring $82.5 \to 83$) rather than Python's ties-to-even Banker's rounding.
+* **Empirical Range Reality Check Diagnostic:**
+  - Compares candidate's final estimate against verified consulting benchmark ranges normalized for identical geography, period, and unit.
+  - Computes variance against a documented midpoint reference baseline:
+    $$\text{variance\_percent} = \left(\frac{\text{candidate\_estimate} - \text{range\_midpoint}}{\text{range\_midpoint}}\right) \times 100\%$$
+* **Epistemic Humility in Candidate Branch Evidence Audit:**
+  - Audits candidate branches against a 5-tier status enum with literal transcript evidence:
+    - 🟢 `supported_mece`: Validated non-overlapping segment.
+    - 🔴 `confirmed_overlap`: Explicit double counting detected.
+    - 🟠 `omitted_segment`: Significant market sub-segment neglected.
+    - 🟡 `unsupported_proxy`: Numerical assumption made without real-world justification.
+    - ⚪ `unclear_evidence`: Transcript ambiguous; marked unclear rather than making unsupported assumptions.
+* **Direction-Aware Deterministic Sensitivity Engine with 3-Tier Precedence:**
+  - Eliminates naive keyword traps by enforcing a strict 3-tier precedence order:
+    1. **Tier 1 (Validated Formula Structure & Isolated Variable Roles):** Analyzes the algebraic formula. If the driver is an isolated divisor in a pure division model (e.g. $E = H / R$), validates strictly as `inverse_denominator` ($E \propto 1/D$). If purely multiplicative, validates strictly as `direct_multiplier` ($E \propto D$), explicitly overriding keywords like "cycle". If the formula contains additive offsets (e.g. $E = (H \cdot P)/R + F$), ratio scaling is mathematically invalid; the ambiguity guard immediately holds the simulation and emits `insufficient_formula_articulation` rather than generating misleading numbers.
+    2. **Tier 2 (LLM Role Cross-Validation):** When formulas are stated informally, cross-validates explicit `variable_role` (`denominator_divisor` vs. `numerator_factor`) against transcript reasoning.
+    3. **Tier 3 (Keyword Fallback with Ambiguity Guard):** Division keywords act strictly as a fallback; if any ambiguity or multi-variable interplay remains, simulation is withheld to safeguard diagnostic integrity.
+* **Multi-Driver Sensitivity Ranking (Tornado Comparison):**
+  - Isolates primary (volume) and secondary (unit economics) drivers, computing conservative floor and aggressive ceiling bounds side-by-side to highlight where the candidate must invest 80% of their interview defense.
 
 #### 3. Round 3 Workflow Diagram
 ```mermaid
 flowchart TD
     Start(["Candidate Enters Guesstimate Studio"]) --> PickCase["Select Category: Market Sizing, Volume, Revenue<br/>Select Tier: Foundation, Intermediate, Advanced"]
     PickCase --> CasePrompt["Present Estimation Problem<br/>e.g., Annual EV Charger Demand in Urban Tier-1"]
-    CasePrompt --> Decompose["Candidate Builds MECE Tree Branches"]
-    Decompose --> StateAssumptions["Candidate Declares Population, Penetration & Units"]
-    StateAssumptions --> CalcResult["Candidate Calculates Final Value"]
-    CalcResult --> Ingest["POST /api/guesstimate/answer"]
+    CasePrompt --> CandidateAns["Candidate Articulates Formula Breakdown & Mental Math Out Loud"]
+    CandidateAns --> Ingest["POST /api/guesstimate/answer"]
 
-    subgraph MathEngine ["Deterministic Math Engine"]
-        Ingest --> ExtractEq["Extract Variables & Equations"]
-        ExtractEq --> SymbolicMath["Symbolic Computation Engine<br/>Re-calculate step-by-step products"]
-        SymbolicMath --> SanityCheck{"Math Matches Candidate?"}
-        SanityCheck -->|Match| MathPass["Math Sanity: 100% Passed"]
-        SanityCheck -->|Mismatch| MathFail["Math Sanity Penalty: Pinpoint Arithmetic Step"]
+    subgraph ConsultingEval ["Consulting Qualitative & Structural Engine"]
+        Ingest --> MECE_Audit["Candidate Branch Evidence Audit<br/>🟢 supported_mece | 🔴 confirmed_overlap<br/>🟠 omitted_segment | 🟡 unsupported_proxy | ⚪ unclear_evidence"]
+        Ingest --> RubricExtract["Extract 4 Consulting Rubric Scores:<br/>MECE (35%) | Proxy (25%) | Math (20%) | Sanity (20%)"]
     end
 
-    subgraph MECEEval ["MECE Structure Evaluator"]
-        Ingest --> LLM_MECE["Evaluate Mutually Exclusive & Collectively Exhaustive Properties"]
-        LLM_MECE --> ProxyAudit["Validate Proxy Assumption Feasibility"]
+    subgraph DeterministicCore ["Deterministic Numerical Engines (Source of Truth)"]
+        RubricExtract --> WeightedScore["Conventional Half-Up Rounding Engine:<br/>Score = round_half_up(0.35*M + 0.25*P + 0.20*A + 0.20*S)"]
+        Ingest --> RangeNorm["Unit-Normalized Reality Check Gauge:<br/>Variance = ((Candidate - Midpoint) / Midpoint) * 100%"]
+        Ingest --> SensValidation["3-Tier Precedence Sensitivity Validator:<br/>1. Validated Formula (Divisor vs Multiplier)<br/>2. Cross-Validated Role | 3. Ambiguity Guard"]
+        SensValidation --> TornadoSim["Multi-Driver Tornado Ranking:<br/>Simulate Conservative Floor vs. Aggressive Ceiling"]
     end
 
-    subgraph BenchmarkEngine ["Industry Benchmark Engine"]
-        Ingest --> BenchmarkRange["Load Empirical Range: e.g., 40k - 60k Units ($80M - $120M)"]
-        BenchmarkRange --> OrderOfMag["Check Order of Magnitude Feasibility"]
-    end
+    WeightedScore --> Consolidate["Persist to guesstimate_cases Table (v2 Schema)"]
+    RangeNorm --> Consolidate
+    MECE_Audit --> Consolidate
+    TornadoSim --> Consolidate
 
-    MathPass --> Consolidate["Persist to guesstimate_cases Table"]
-    MathFail --> Consolidate
-    ProxyAudit --> Consolidate
-    OrderOfMag --> Consolidate
+    Consolidate --> RenderReport["Render /guesstimate/report/:id Dossier<br/>4-Rubric Grid + Benchmark Range Bar + MECE Branch Audit + Tornado Sensitivity Panel"]
 
-    Consolidate --> RenderReport["Render /guesstimate/report/:id Dossier<br/>Visual MECE Tree + Math Audit + Benchmark Range"]
-
-    style Decompose fill:#10b981,stroke:#047857,color:#fff
-    style SymbolicMath fill:#059669,stroke:#065f46,color:#fff
-    style RenderReport fill:#047857,stroke:#065f46,color:#fff
+    style CandidateAns fill:#10b981,stroke:#047857,color:#fff
+    style SensValidation fill:#059669,stroke:#065f46,color:#fff
+    style WeightedScore fill:#047857,stroke:#065f46,color:#fff
+    style RenderReport fill:#065f46,stroke:#022c22,color:#fff
 ```
 
 ---
@@ -626,6 +641,55 @@ erDiagram
 
 ---
 
+### D. Autonomous Curriculum Coach Agent: Closed-Loop LangGraph State Machine
+
+While the 3-Layer Dashboard visualizes multi-round readiness, candidates frequently struggle with **curriculum paralysis**: deciding which round, rubric, or drill difficulty to prioritize on a given day. The **Autonomous Curriculum Coach Agent** solves this by converting static telemetry into a dynamic, closed-loop pedagogical journey.
+
+```mermaid
+graph TD
+    Start(["Candidate Profile / Re-Plan Trigger"]) --> Audit["Node 1: audit_history_node<br/>Aggregate Cross-Round Telemetry from progress.py"]
+    Audit --> Diagnose["Node 2: diagnose_bottlenecks_node<br/>Deterministic Rule Engine Sorting Gaps by Severity"]
+    Diagnose --> Synthesize["Node 3: synthesize_roadmap_node<br/>LLM Synthesizes Personalized 7-Day Syllabus"]
+    Synthesize --> Validate{"Node 4: validate_feasibility_node<br/>7-Day Count & Real Route Check"}
+    
+    Validate -->|Route / Count Invalid & Iterations < 2| Synthesize
+    Validate -->|Passed or Corrected| SavePlan["Commit CurriculumPlan ORM to DB (status='active')"]
+    SavePlan --> CockpitUI["Render CurriculumCoachCard on Cockpit Dashboard"]
+    
+    CockpitUI --> LaunchDrill["1-Click Drill Launcher<br/>(/record, /technical, /guesstimate, /hr)"]
+    LaunchDrill --> CompleteRound["Candidate Completes Drill Session"]
+    CompleteRound --> AutoSync["POST /api/coach/auto-sync<br/>Auto-Record Score & Advance Next Day"]
+
+    style Audit fill:#0284c7,stroke:#0369a1,color:#fff
+    style Diagnose fill:#f59e0b,stroke:#b45309,color:#fff
+    style Synthesize fill:#8b5cf6,stroke:#6d28d9,color:#fff
+    style Validate fill:#10b981,stroke:#047857,color:#fff
+    style SavePlan fill:#059669,stroke:#065f46,color:#fff
+```
+
+#### 1. Deterministic Multi-Round Telemetry Auditing
+The agent directly queries historical performance across all four specialized modules:
+* **JAM Fluency:** Evaluates speaking pace deviations (outside 135-155 WPM), filler word density (> 3/session triggers priority flag), and gaze adherence.
+* **Technical Architecture:** Scans conciseness score, rambling frequency (> 20% triggers anti-rambling focus), and rote textbook reliance vs. applied systems understanding.
+* **Consulting Guesstimate:** Audits the 4 decoupled consulting rubrics: MECE structuring (35%), proxy assumption sanity (25%), mental math flow (20%), and sanity check benchmarks (20%). Identifies order-of-magnitude slips and non-MECE branch partitions.
+* **HR & Leadership:** Audits STAR quadrant coverage and personal ownership ("I" vs. "We" agency ratio < 75%).
+* **Coverage Baseline:** Explicitly flags unattempted rounds (0 attempts) to ensure balanced campus placement calibration.
+
+#### 2. LangGraph State Machine Topology
+Implemented using LangGraph `StateGraph(CurriculumState)`:
+1. **`audit_history_node`**: Aggregates verified metrics from database sessions.
+2. **`diagnose_bottlenecks_node`**: Evaluates gap metrics against calibrated placement thresholds (85% strong hire, 75% baseline), sorting bottlenecks into `high`, `medium`, and `low` urgency tiers.
+3. **`synthesize_roadmap_node`**: LLM generates an adaptive 7-day chronological syllabus with concrete pedagogical rationales for why each drill is prescribed.
+4. **`validate_feasibility_node`**: Deterministic guardrail enforcing that all prescribed routes match live platform endpoints (`/record`, `/technical`, `/guesstimate`, `/hr`), and top bottlenecks are addressed in Days 1–2.
+5. **Conditional Edge (`route_validation`)**: Automatically re-prompts the synthesizer if validation fails (bounded to 2 iterations), otherwise falls back to a deterministic verified template.
+
+#### 3. Closed-Loop Practice & Auto-Sync Execution
+* **ORM Persistence (`curriculum_plans` Table):** Stores `target_role`, `identified_bottlenecks`, `days` array, and completion telemetry.
+* **Active Day Spotlight Card:** Highlights the active day's drill with direct 1-click execution (`Launch Prescribed Drill`) pre-routing to the target studio.
+* **Auto-Sync Engine (`POST /api/coach/auto-sync`):** Automatically detects newly submitted interview sessions created after plan generation, records candidate scores, marks the day completed, and unlocks the next day.
+
+---
+
 ## 6. Guardrails, Calibrations, and Quality Assurance
 
 * **Zero Single-Score Blurring:** Avoids compressing fundamentally distinct abilities (e.g., vocal delivery vs. distributed systems design) into an ungrounded general score.
@@ -647,6 +711,7 @@ erDiagram
 | **Phase 4** | HR & Behavioral Module | 40-question database seed (`hr_questions`), STAR quadrant analyzer, "I" ownership evaluator, adaptive follow-up state machine, studio & dossier. | **100% Verified** |
 | **Phase 5** | 3-Layer Placement Dashboard | Layer 1 Readiness Matrix, Layer 2 Longitudinal Trajectories with benchmark thresholds, Layer 3 unified attempt history, persistent logging. | **100% Verified** |
 | **Phase 6** | Acceptance Suite Validation | Automated end-to-end multi-round validation test suite running across all 4 rounds and 3 dashboard layers. | **100% Passed (4/4 Rounds)** |
+| **Phase 7** | Autonomous Curriculum Coach Agent | LangGraph 4-node cyclic state machine, multi-round historical telemetry audit from `progress.py`, deterministic bottleneck classification, adaptive 7-day personalized interview syllabus, and real-time auto-sync engine. | **100% Verified** |
 
 ---
 
@@ -715,9 +780,10 @@ graph TD
 | **Speech & Audio DSP** | WhisperX + Silero via HTTP inter-service call | **Native Faster-Whisper + Silero VAD in FastAPI pipeline** |
 | **Visual Multimodal** | None (Transcripts only) | **MediaPipe FaceMesh & Posture tracking strictly during speech** |
 | **Technical Interview** | Generic rubric presence | **Conciseness (SNR), Anti-Rambling, Jargon vs. Intuition & Sentence Checkpoints** |
-| **Guesstimate Round** | Subjective text evaluation | **Interactive MECE Tree + Deterministic Symbolic Math Engine** |
+| **Guesstimate Round** | Subjective text evaluation | **4-Rubric Consulting Architecture (35/25/20/20 Half-Up) + 5-Tier Branch Audit + Midpoint Range Gauge + 3-Tier Precedence Tornado Sensitivity** |
 | **HR Behavioral Round** | Rigid static single follow-up logic | **40-Question Deduplicated DB Bank + STAR Coach + 'I' Ownership Meter** |
 | **Dashboard Evaluation** | Single generic radar score | **3-Layer Unified Placement Matrix without score-blurring** |
+| **Curriculum Planning** | Static syllabus / no feedback loop | **Autonomous Curriculum Coach (LangGraph 4-node state graph + deterministic bottleneck audit + adaptive 7-day drill roadmap + auto-sync)** |
 | **Containerization / DB**| Proposed multi-service setup | **PostgreSQL with automatic resilient SQLite fallback + Rotating File Logs** |
 
 ---

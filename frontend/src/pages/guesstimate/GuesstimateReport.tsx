@@ -83,6 +83,7 @@ export default function GuesstimateReport() {
 
   const evaluation = data.evaluation;
   const score = data.overall_score || evaluation?.overall_score || 0;
+  const laya = evaluation?.laya_metrics;
 
   // Verdict calculation
   let verdict = { text: "Needs Structuring Rigor", color: "text-rose-400 bg-rose-500/10 border-rose-500/20" };
@@ -196,6 +197,85 @@ export default function GuesstimateReport() {
         vocalDelivery={evaluation?.vocal_delivery}
         accent="tertiary"
       />
+
+      {/* Speech Cadence & Coachability */}
+      <div className="p-5 sm:p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-sm flex flex-col gap-4 print:border-black/20 print:bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[20px] text-indigo-500">
+              graphic_eq
+            </span>
+            <span className="font-label-caps text-xs uppercase text-outline font-semibold tracking-wider">
+              Speech Cadence &amp; Coachability
+            </span>
+          </div>
+          <span
+            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+              laya?.available
+                ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/30"
+                : "bg-surface-container-high text-outline border-outline-variant/30"
+            }`}
+          >
+            {laya?.available ? "Laya Telemetry" : "No Live Telemetry"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/20">
+            <div className="flex items-center justify-between text-[11px] mb-1.5">
+              <span className="text-outline font-semibold uppercase tracking-wider">
+                Rebound Agility
+              </span>
+              <span className="font-label-numeric text-on-surface font-bold">
+                {laya?.available
+                  ? `${Math.round(laya.rebound_agility_score)}/100`
+                  : "—"}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
+              <div
+                className="h-full rounded-full bg-indigo-400"
+                style={{
+                  width: `${laya?.available ? laya.rebound_agility_score : 0}%`,
+                  transition: "width 0.4s ease-out",
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-outline mt-2 leading-relaxed">
+              {laya?.available && laya.hints_issued > 0
+                ? `Recovered after ${laya.rebound_success_count}/${laya.hints_issued} nudges · avg ${laya.average_rebound_latency_sec.toFixed(1)}s`
+                : "How quickly you resumed after a Laya scaffold nudge."}
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-surface-container border border-outline-variant/20">
+            <div className="flex items-center justify-between text-[11px] mb-1.5">
+              <span className="text-outline font-semibold uppercase tracking-wider">
+                Cadence Stability
+              </span>
+              <span className="font-label-numeric text-on-surface font-bold">
+                {laya?.available
+                  ? `${Math.round(laya.cadence_stability)}/100`
+                  : "—"}
+              </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-surface-container-highest overflow-hidden">
+              <div
+                className="h-full rounded-full bg-emerald-400"
+                style={{
+                  width: `${laya?.available ? laya.cadence_stability : 0}%`,
+                  transition: "width 0.4s ease-out",
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-outline mt-2 leading-relaxed">
+              {laya?.available
+                ? `${Math.round(laya.speech_ratio * 100)}% speaking rhythm · ${laya.total_silent_seconds.toFixed(1)}s silent`
+                : "Consistency of your speaking rhythm versus long stalls."}
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Case Problem Banner */}
       <div className="p-5 sm:p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-2 shadow-sm print:border-black/20 print:bg-gray-50">

@@ -7,9 +7,21 @@ export interface LiveEmotionState {
   delivery_style?: string;
 }
 
+export interface CoachNudge {
+  tier: 1 | 2;
+  message: string;
+}
+
+export interface LiveStreamContext {
+  category?: string;
+  question?: string;
+  partialTranscript?: string;
+}
+
 interface UseLiveEmotionStreamResult {
   liveEmotion: LiveEmotionState | null;
   isConnected: boolean;
+  nudge: CoachNudge | null;
 }
 
 function resolveWsBase(): string {
@@ -34,15 +46,26 @@ function resolveWsBase(): string {
 
 export function useLiveEmotionStream(
   sessionId: number | null,
-  isRecording: boolean
+  isRecording: boolean,
+  context?: LiveStreamContext
 ): UseLiveEmotionStreamResult {
   const [liveEmotion, setLiveEmotion] = useState<LiveEmotionState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [nudge, setNudge] = useState<CoachNudge | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const cancelledRef = useRef(false);
+  const contextRef = useRef<LiveStreamContext | undefined>(context);
+
+  useEffect(() => {
+    contextRef.current = context;
+  }, [context]);
+
+  useEffect(() => {
+    if (!isRecording) setNudge(null);
+  }, [isRecording]);
 
   useEffect(() => {
     if (!sessionId || !isRecording) {
@@ -94,12 +117,40 @@ export function useLiveEmotionStream(
         ws.binaryType = "arraybuffer";
         wsRef.current = ws;
 
-        ws.onopen = () => setIsConnected(true);
+        ws.onopen = () => {
+          setIsConnected(true);
+          if (contextRef.current) {
+            try {
+              ws?.send(
+                JSON.stringify({
+                  type: "context",
+                  ...contextRef.current,
+                })
+              );
+            } catch {
+              // ignore context send errors
+            }
+          }
+        };
         ws.onclose = () => setIsConnected(false);
         ws.onerror = () => setIsConnected(false);
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data as string);
+            if (data?.type === "clear_nudge") {
+              setNudge(null);
+              return;
+            }
+            if (
+              data?.type === "coach_nudge" &&
+              typeof data.message === "string"
+            ) {
+              setNudge({
+                tier: data.tier === 2 ? 2 : 1,
+                message: data.message,
+              });
+              return;
+            }
             if (typeof data?.confidence === "number") {
               setLiveEmotion({
                 confidence: data.confidence,
@@ -152,6 +203,28 @@ export function useLiveEmotionStream(
     return cleanup;
   }, [sessionId, isRecording]);
 
+  const category = context?.category;
+  const question = context?.question;
+  const partialTranscript = context?.partialTranscript;
+
+  useEffect(() => {
+    if (!category && !question && !partialTranscript) return;
+    const ws = wsRef.current;
+    if (!isRecording || !ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(
+        JSON.stringify({
+          type: "context",
+          category,
+          question,
+          partialTranscript,
+        })
+      );
+    } catch {
+      // ignore context send errors
+    }
+  }, [category, question, partialTranscript, isRecording]);
+
   useEffect(() => {
     return () => {
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
@@ -174,5 +247,5 @@ export function useLiveEmotionStream(
     };
   }, []);
 
-  return { liveEmotion, isConnected };
+  return { liveEmotion, isConnected, nudge };
 }

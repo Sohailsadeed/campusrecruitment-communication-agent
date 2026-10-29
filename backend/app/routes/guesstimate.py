@@ -20,6 +20,7 @@ from app.services.guesstimate.question_bank import (
     get_random_question,
 )
 from app.services.emotion import analyze_speech_emotion, get_session_emotion_summary
+from app.services.laya import get_session_laya_metrics
 from app.services.transcription import transcribe_audio
 from config import settings
 
@@ -175,6 +176,7 @@ async def submit_guesstimate_answer(
         session.id, fallback=vocal_delivery
     )
     eval_result["vocal_delivery"] = final_vocal_delivery
+    eval_result["laya_metrics"] = get_session_laya_metrics(session.id)
 
     # Update GuesstimateCase record
     case.candidate_answer = candidate_answer.strip()

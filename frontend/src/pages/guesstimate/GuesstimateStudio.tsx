@@ -10,6 +10,7 @@ import {
 } from "../../api/guesstimate";
 import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
 import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
+import LiveCoachNudge from "../../components/Interview/LiveCoachNudge";
 
 const CATEGORY_CARDS = [
   {
@@ -99,7 +100,11 @@ export default function GuesstimateStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
+  const { liveEmotion, nudge } = useLiveEmotionStream(sessionId, isRecording, {
+    category,
+    question: activeQuestion,
+    partialTranscript: answerText,
+  });
 
   // 1. Fetch metadata on mount
   useEffect(() => {
@@ -764,6 +769,8 @@ export default function GuesstimateStudio() {
         {isRecording && (
           <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
         )}
+
+        <LiveCoachNudge nudge={nudge} />
 
         {/* Articulation Text Area */}
         <textarea

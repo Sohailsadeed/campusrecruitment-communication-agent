@@ -85,6 +85,18 @@ export interface SensitivityAnalysis {
   explanation: string;
 }
 
+export interface LayaMetrics {
+  available: boolean;
+  rebound_agility_score: number;
+  cadence_stability: number;
+  hints_issued: number;
+  rebound_success_count: number;
+  average_rebound_latency_sec: number;
+  speech_ratio: number;
+  total_speech_seconds: number;
+  total_silent_seconds: number;
+}
+
 export interface GuesstimateEvaluation {
   overall_score: number;
   mece_score: number;
@@ -116,6 +128,7 @@ export interface GuesstimateEvaluation {
   ideal_verbal_script: string;
   executive_summary: string;
   vocal_delivery?: VocalDelivery;
+  laya_metrics?: LayaMetrics;
 }
 
 export interface GuesstimateSessionResponse {

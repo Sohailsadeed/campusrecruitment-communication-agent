@@ -112,7 +112,8 @@ The speaker chose this specific topic/drill: "{topic}"
 Speech & Acoustic Analytics:
 - Selected Topic: "{topic}"
 - Speaking pace: {speaking_pace} WPM
-- Total Silence/Pause Time: {total_pause_time}s across {pause_count} pauses (longest pause: {longest_pause}s)
+- Total Silence/Pause Time: {total_pause_time}s across {pause_count} real pauses >= 1.2s (longest pause: {longest_pause}s)
+- Micro-hesitations (0.5s-1.19s): {micro_hesitation_count} beats / {micro_hesitation_time}s total
 - Hesitations / Filler sounds count: {filler_count} ({filler_list})
 - Repeated content words: {repetition_count} ({repetition_list})
 - Calculated Score: {jam_score}/100 | Verdict: {jam_verdict}
@@ -193,6 +194,8 @@ def _build_prompt(
         total_pause_time=metrics.get("total_pause_time", 0.0),
         pause_count=metrics.get("pause_count", 0),
         longest_pause=metrics.get("longest_pause", 0.0),
+        micro_hesitation_count=metrics.get("micro_hesitation_count", 0),
+        micro_hesitation_time=metrics.get("micro_hesitation_time", 0.0),
         filler_count=metrics.get("filler_words_count", 0),
         filler_list=filler_list,
         repetition_count=metrics.get("repetitions_count", 0),

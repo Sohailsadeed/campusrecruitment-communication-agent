@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
 import type { SessionDetail } from "../../types";
 
@@ -6,57 +6,115 @@ interface AnalysisResultsProps {
   session: SessionDetail;
 }
 
+function formatAudioTime(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "0:00";
+  const total = Math.floor(value);
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const [rewriteIdx, setRewriteIdx] = useState(0);
-  const [isPlayingTTS, setIsPlayingTTS] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioReady, setAudioReady] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const report = session.report;
+  const audioUrl = session.audio_url || null;
 
-  const toggleTTS = () => {
-    if (isPlayingTTS) {
-      if (audioRef.current) {
-        audioRef.current.pause();
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      try {
+        audio.currentTime = 0;
+      } catch {
+        // Metadata may not be loaded yet; the source change will reset it.
       }
-      window.speechSynthesis.cancel();
-      setIsPlayingTTS(false);
+    }
+    setIsPlaying(false);
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
+    setAudioReady(false);
+    setAudioError(null);
+    setAudioLoading(!!audioUrl);
+
+    return () => {
+      audioRef.current?.pause();
+    };
+  }, [session.id, audioUrl]);
+
+  const handleAudioError = () => {
+    const code = audioRef.current?.error?.code;
+    let message = "The original recording could not be played.";
+    if (code === 3) {
+      message = "The original recording could not be decoded by your browser.";
+    } else if (code === 4) {
+      message = "The original recording is missing or its format is not supported by your browser.";
+    } else if (code === 2) {
+      message = "The original recording could not be loaded from the server.";
+    }
+    setAudioError(message);
+    setIsPlaying(false);
+    setAudioReady(false);
+    setAudioLoading(false);
+  };
+
+  const syncAudioDuration = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const duration = audio.duration;
+    if (Number.isFinite(duration) && duration > 0) {
+      setAudioDuration(duration);
+      setAudioReady(true);
+      setAudioLoading(false);
+      setAudioError(null);
+      setAudioCurrentTime(Math.min(audio.currentTime || 0, duration));
+    } else {
+      setAudioDuration(0);
+      setAudioReady(false);
+      setAudioLoading(false);
+      setAudioError("This recording has no playable duration.");
+    }
+  };
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl || audioError) return;
+
+    if (!audio.paused) {
+      audio.pause();
       return;
     }
 
-    const ttsUrl = `http://localhost:8000/api/sessions/${session.id}/tts`;
-    const audio = new Audio(ttsUrl);
-    audioRef.current = audio;
+    if (audio.ended) {
+      audio.currentTime = 0;
+    }
 
-    setIsPlayingTTS(true);
-
-    audio.play().catch(() => {
-      // Graceful fallback to Web Speech API
-      const textToSpeak = report?.feedback_content || session.feedback[0]?.content || "Session evaluation complete.";
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.rate = 1.0;
-      utterance.pitch = 0.95;
-      utterance.onend = () => setIsPlayingTTS(false);
-      utterance.onerror = () => setIsPlayingTTS(false);
-      window.speechSynthesis.speak(utterance);
-    });
-
-    audio.onended = () => setIsPlayingTTS(false);
-    audio.onerror = () => {
-      // Fallback to Web Speech API
-      const textToSpeak = report?.feedback_content || session.feedback[0]?.content || "Session evaluation complete.";
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
-      utterance.onend = () => setIsPlayingTTS(false);
-      utterance.onerror = () => setIsPlayingTTS(false);
-      window.speechSynthesis.speak(utterance);
-    };
+    try {
+      await audio.play();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setAudioError("Playback could not start. The recording may be unavailable or unsupported.");
+      setIsPlaying(false);
+    }
   };
 
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) audioRef.current.pause();
-      window.speechSynthesis.cancel();
-    };
-  }, []);
+  const handleSeek = (event: ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    const requested = Number(event.target.value);
+    if (!audio || !audioReady || audioDuration <= 0 || !Number.isFinite(requested)) {
+      return;
+    }
+    const nextTime = Math.min(audioDuration, Math.max(0, requested));
+    audio.currentTime = nextTime;
+    setAudioCurrentTime(nextTime);
+  };
 
   const score = Math.round(session.overall_score || session.analysis?.clarity_score || 84);
   const pace = Math.round(session.analysis?.speaking_pace || 140);
@@ -173,6 +231,15 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
   // Dynamic Extraction of Actual Detected Fillers and Repetitions
   const rawFillerList = session.analysis?.filler_words_list || {};
   const jamData = rawFillerList._jam || {};
+  const totalPauseTime = Number(jamData.total_pause_time ?? report?.metrics?.total_pause_time ?? 0);
+  const pauseCount = Number(jamData.pause_count ?? report?.metrics?.pause_count ?? 0);
+  const longestPause = Number(jamData.longest_pause ?? 0);
+  const microHesitationCount = Number(
+    jamData.micro_hesitation_count ?? report?.metrics?.micro_hesitation_count ?? 0
+  );
+  const microHesitationTime = Number(
+    jamData.micro_hesitation_time ?? report?.metrics?.micro_hesitation_time ?? 0
+  );
 
   const detectedFillers: { word: string; count: number; category: string }[] = [];
   Object.entries(rawFillerList).forEach(([key, val]) => {
@@ -332,34 +399,150 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
               {report?.feedback_content || session.feedback[0]?.content || "Candidate demonstrated disciplined delivery. Speech cadence remained focused with clear structural clarity."}
             </p>
 
-            {/* Auditory Adjudication Voice Player */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={toggleTTS}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg border transition-all text-xs font-semibold shadow-sm ${
-                  isPlayingTTS
-                    ? "bg-tertiary text-on-tertiary border-tertiary shadow-md"
-                    : "bg-surface-container-high text-on-surface border-outline-variant/40 hover:bg-surface-container-highest"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  {isPlayingTTS ? "pause_circle" : "volume_up"}
+            {/* Original JAM Recording Playback */}
+            <div className="flex flex-col gap-2 pt-2 w-full max-w-xl">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-label-caps text-[10px] uppercase text-outline font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">graphic_eq</span>
+                  Original Recording
                 </span>
-                <span>{isPlayingTTS ? "Pause Executive Coach" : "Listen to Coach Adjudication"}</span>
-              </button>
-
-              {isPlayingTTS && (
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-tertiary/10 border border-tertiary/30 animate-in fade-in duration-300">
-                  <div className="flex items-center gap-1">
-                    <span className="w-1 h-3.5 bg-tertiary rounded-full animate-pulse" />
-                    <span className="w-1 h-5 bg-tertiary rounded-full animate-pulse delay-75" />
-                    <span className="w-1 h-2 bg-tertiary rounded-full animate-pulse delay-150" />
-                  </div>
-                  <span className="font-label-numeric-sm text-[11px] text-tertiary font-bold flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[12px]">smart_toy</span>
-                    Avatar: {report?.avatar_reaction?.expression || "empathic_nod"}
+                {audioUrl && !audioError && (
+                  <span className="font-label-numeric-sm text-[10px] text-tertiary font-semibold">
+                    {audioReady ? "Ready" : audioLoading ? "Loading recording..." : "Preparing playback"}
                   </span>
+                )}
+              </div>
+
+              {!audioUrl ? (
+                <div className="flex items-start gap-2.5 rounded-lg border border-outline-variant/30 bg-surface-container p-3 text-left">
+                  <span className="material-symbols-outlined text-[18px] text-outline">mic_off</span>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-on-surface">Original recording unavailable</span>
+                    <span className="text-[11px] text-on-surface-variant">
+                      The session audio is missing or no longer accessible. The analysis results remain available.
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-outline-variant/30 bg-surface-container p-3">
+                  <audio
+                    ref={audioRef}
+                    src={audioUrl}
+                    preload="metadata"
+                    className="hidden"
+                    onLoadStart={() => setAudioLoading(true)}
+                    onLoadedMetadata={syncAudioDuration}
+                    onDurationChange={() => {
+                      const audio = audioRef.current;
+                      if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+                        syncAudioDuration();
+                      }
+                    }}
+                    onCanPlay={() => {
+                      setAudioLoading(false);
+                      setAudioReady(true);
+                    }}
+                    onPlaying={() => {
+                      setAudioLoading(false);
+                      setIsPlaying(true);
+                    }}
+                    onPlay={() => setIsPlaying(true)}
+                    onPause={() => setIsPlaying(false)}
+                    onWaiting={() => setAudioLoading(true)}
+                    onStalled={() => setAudioLoading(true)}
+                    onTimeUpdate={() => {
+                      const audio = audioRef.current;
+                      if (!audio) return;
+                      const time = audio.currentTime;
+                      if (Number.isFinite(time)) {
+                        setAudioCurrentTime(
+                          audioDuration > 0 ? Math.min(time, audioDuration) : Math.max(0, time)
+                        );
+                      }
+                    }}
+                    onSeeked={() => {
+                      const audio = audioRef.current;
+                      if (audio && Number.isFinite(audio.currentTime)) {
+                        setAudioCurrentTime(
+                          audioDuration > 0
+                            ? Math.min(audio.currentTime, audioDuration)
+                            : Math.max(0, audio.currentTime)
+                        );
+                      }
+                    }}
+                    onEnded={() => {
+                      setIsPlaying(false);
+                      setAudioCurrentTime(audioDuration > 0 ? audioDuration : 0);
+                    }}
+                    onError={handleAudioError}
+                  />
+
+                  {audioError ? (
+                    <div className="flex items-start gap-2.5" role="alert">
+                      <span className="material-symbols-outlined text-[18px] text-error">error</span>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-semibold text-on-surface">Recording playback failed</span>
+                        <span className="text-[11px] text-on-surface-variant">{audioError}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const audio = audioRef.current;
+                            setAudioError(null);
+                            setAudioReady(false);
+                            setAudioLoading(true);
+                            setAudioCurrentTime(0);
+                            setAudioDuration(0);
+                            audio?.load();
+                          }}
+                          className="mt-1 w-fit rounded border border-outline-variant/40 px-2 py-1 text-[10px] font-semibold text-on-surface hover:bg-surface-container-high"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={togglePlayback}
+                        disabled={!audioReady}
+                        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg border transition-all text-xs font-semibold shadow-sm ${
+                          isPlaying
+                            ? "bg-tertiary text-on-tertiary border-tertiary shadow-md"
+                            : "bg-surface-container-high text-on-surface border-outline-variant/40 hover:bg-surface-container-highest disabled:cursor-not-allowed disabled:opacity-50"
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          {isPlaying ? "pause" : "play_arrow"}
+                        </span>
+                        <span>{isPlaying ? "Pause Recording" : "Play Original Recording"}</span>
+                      </button>
+
+                      <div className="flex min-w-[180px] flex-1 flex-col gap-1">
+                        <input
+                          type="range"
+                          min={0}
+                          max={audioDuration > 0 ? audioDuration : 0}
+                          step={0.1}
+                          value={audioDuration > 0 ? Math.min(audioCurrentTime, audioDuration) : 0}
+                          onChange={handleSeek}
+                          disabled={!audioReady || audioDuration <= 0}
+                          aria-label="Seek original recording"
+                          className="h-1.5 w-full cursor-pointer accent-tertiary disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                        <div className="flex justify-between font-label-numeric-sm text-[10px] text-outline font-medium">
+                          <span>{formatAudioTime(audioCurrentTime)}</span>
+                          <span>
+                            {audioReady && audioDuration > 0
+                              ? formatAudioTime(audioDuration)
+                              : audioLoading
+                                ? "Loading..."
+                                : "--:--"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -572,6 +755,62 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
             </div>
           </div>
 
+          {/* Acoustic Pause Diagnostics Card */}
+          <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 shadow-lg flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="font-label-caps text-[10px] uppercase text-outline font-semibold">
+                  Acoustic Silence Analysis
+                </span>
+                <h3 className="font-headline-sm text-base text-on-surface font-bold">
+                  Pause &amp; Hesitation Diagnostics
+                </h3>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-secondary/10 text-secondary font-label-numeric-sm text-xs font-bold">
+                {pauseCount} real · {microHesitationCount} micro
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-surface-container p-3 rounded-lg text-center border border-secondary/15">
+                <div className="font-label-numeric text-lg text-secondary font-bold">
+                  {totalPauseTime.toFixed(1)}s
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-medium mt-0.5">
+                  Real Pause Time (&ge; 1.2s)
+                </div>
+              </div>
+              <div className="bg-surface-container p-3 rounded-lg text-center border border-outline-variant/20">
+                <div className="font-label-numeric text-lg text-on-surface font-bold">
+                  {longestPause.toFixed(1)}s
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-medium mt-0.5">
+                  Longest Freeze
+                </div>
+              </div>
+              <div className="bg-surface-container p-3 rounded-lg text-center border border-outline-variant/20">
+                <div className="font-label-numeric text-lg text-on-surface font-bold">
+                  {microHesitationCount}
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-medium mt-0.5">
+                  Micro-hesitations
+                </div>
+              </div>
+              <div className="bg-surface-container p-3 rounded-lg text-center border border-outline-variant/20">
+                <div className="font-label-numeric text-lg text-on-surface font-bold">
+                  {microHesitationTime.toFixed(1)}s
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-medium mt-0.5">
+                  Short Beat Time
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+              Micro-hesitations are silence beats from 0.5s to 1.19s. Real pauses are 1.2s or
+              longer and receive the stronger JAM silence penalty.
+            </p>
+          </div>
 
           {/* Dynamic Pacing Fluctuations Card */}
           <div className="bg-surface-container-low border border-outline-variant/30 rounded-xl p-6 shadow-lg flex flex-col gap-4">

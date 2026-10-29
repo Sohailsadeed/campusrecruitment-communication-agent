@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import type { VocalDelivery } from "../types";
 
 export interface StarBreakdown {
   situation: boolean;
@@ -6,6 +7,17 @@ export interface StarBreakdown {
   action: boolean;
   result: boolean;
   structure_feedback: string;
+}
+
+export interface SentenceAnalysisItem {
+  index: number;
+  text: string;
+  start?: number | null;
+  end?: number | null;
+  is_conclusion_checkpoint?: boolean;
+  is_rambling?: boolean;
+  highlight?: "green" | "red" | "none";
+  rationale?: string;
 }
 
 export interface QuestionItem {
@@ -24,6 +36,8 @@ export interface QuestionItem {
   jargon_critique?: string;
   star_breakdown?: StarBreakdown;
   ideal_concise_script?: string;
+  conclusion_checkpoint_index?: number | null;
+  sentences?: SentenceAnalysisItem[];
   audio_url?: string;
 }
 
@@ -53,6 +67,7 @@ export interface TechnicalReportSummary {
   strengths: string[];
   weaknesses: string[];
   summary: string;
+  vocal_delivery?: VocalDelivery;
 }
 
 export interface SubmitAnswerResponse {

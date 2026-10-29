@@ -8,6 +8,8 @@ import {
   HRQuestionItem,
   HRTrackInfo,
 } from "../../api/hr";
+import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
+import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
 
 const ROLE_PRESETS = [
   "Software Development Engineer",
@@ -55,6 +57,7 @@ export default function HRStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
 
   // 1. Fetch tracks on mount
   useEffect(() => {
@@ -665,6 +668,10 @@ export default function HRStudio() {
             <span>{isRecording ? "Finish Speaking" : "Answer Verbally (Microphone)"}</span>
           </button>
         </div>
+
+        {isRecording && (
+          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
+        )}
 
         <textarea
           rows={9}

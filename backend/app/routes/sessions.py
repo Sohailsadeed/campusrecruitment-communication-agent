@@ -14,10 +14,12 @@ from fastapi import (
     Form,
     Header,
     HTTPException,
+    Request,
     UploadFile,
     Response,  # Add this
     status,
 )
+from fastapi.responses import FileResponse
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,6 +32,11 @@ from app.schemas.session import (
     SessionDetailOut,
     SessionOut,
     SessionUpdate,
+)
+from app.services.session_media import (
+    get_session_audio_media_type,
+    get_session_audio_path,
+    get_session_audio_url,
 )
 from config import settings
 
@@ -214,11 +221,35 @@ def _get_session_for_user(session_id: int, user: Optional[User], db: Session) ->
 @router.get("/{session_id}", response_model=SessionDetailOut)
 def get_session(
     session_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(_get_optional_user),
 ) -> SessionDetailOut:
     session = _get_session_for_user(session_id, current_user, db)
-    return SessionDetailOut.model_validate(session)
+    detail = SessionDetailOut.model_validate(session)
+    detail.audio_url = get_session_audio_url(session, request)
+    return detail
+
+
+@router.get("/{session_id}/audio")
+def get_session_audio(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(_get_optional_user),
+) -> FileResponse:
+    """Stream the candidate's original JAM recording when it still exists."""
+    session = _get_session_for_user(session_id, current_user, db)
+    audio_path = get_session_audio_path(session)
+    if audio_path is None:
+        raise HTTPException(status_code=404, detail="Original recording unavailable")
+
+    return FileResponse(
+        path=str(audio_path),
+        media_type=get_session_audio_media_type(audio_path),
+        filename=f"session_{session.id}{audio_path.suffix.lower()}",
+        content_disposition_type="inline",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @router.patch("/{session_id}", response_model=SessionOut)

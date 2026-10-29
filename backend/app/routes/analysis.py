@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from app.schemas.session import SessionAnalysisOut, SessionDetailOut, Transcript
 from app.services.analysis import analyze_transcription
 from app.services.feedback import generate_feedback
 from app.services.prosody import analyze_audio_prosody
+from app.services.session_media import get_session_audio_url
 from app.services.tracking import analyze_video
 from app.services.transcription import transcribe_audio
 from app.services.tts import synthesize_feedback_audio
@@ -82,7 +83,11 @@ def _extract_filler_timeline(words: list, filler_dict: dict) -> list[dict]:
 
 
 @router.post("/{session_id}/analyze", response_model=SessionDetailOut)
-def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDetailOut:
+def analyze_session(
+    session_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SessionDetailOut:
     session = db.get(SessionModel, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -114,6 +119,9 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             "pause_count": result.get("pause_count", 0),
             "longest_pause": result.get("longest_pause", 0.0),
             "pauses": result.get("pauses", []),
+            "micro_hesitation_count": result.get("micro_hesitation_count", 0),
+            "micro_hesitation_time": result.get("micro_hesitation_time", 0.0),
+            "micro_hesitations": result.get("micro_hesitations", []),
         }
         metrics = analyze_transcription(
             transcription_text,
@@ -151,6 +159,9 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 "pause_count": combined.get("pause_count", 0),
                 "longest_pause": combined.get("longest_pause", 0.0),
                 "pauses": combined.get("pauses", []),
+                "micro_hesitation_count": combined.get("micro_hesitation_count", 0),
+                "micro_hesitation_time": combined.get("micro_hesitation_time", 0.0),
+                "micro_hesitations": combined.get("micro_hesitations", []),
             }
         }
 
@@ -209,6 +220,8 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
             "speaking_pace": float(combined.get("speaking_pace", 0.0)),
             "pause_time": combined.get("total_pause_time", 0.0),
             "pause_count": combined.get("pause_count", 0),
+            "micro_hesitation_count": combined.get("micro_hesitation_count", 0),
+            "micro_hesitation_time": combined.get("micro_hesitation_time", 0.0),
             "repetition_count": combined.get("repetitions_count", 0),
             "hesitation_count": combined.get("hesitations_count", combined.get("filler_words_count", 0)),
             "cardinal_infractions": combined.get("jam_infractions", []),
@@ -249,6 +262,8 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
                 "filler_words_count": int(combined.get("filler_words_count", 0)),
                 "total_pause_time": float(combined.get("total_pause_time", 0.0)),
                 "pause_count": int(combined.get("pause_count", 0)),
+                "micro_hesitation_count": int(combined.get("micro_hesitation_count", 0)),
+                "micro_hesitation_time": float(combined.get("micro_hesitation_time", 0.0)),
                 "repetitions_count": int(combined.get("repetitions_count", 0)),
                 "eye_contact_percentage": float(combined.get("eye_contact_percentage", 82.0)),
                 "posture_quality": float(combined.get("posture_quality", 85.0)),
@@ -262,7 +277,9 @@ def analyze_session(session_id: int, db: Session = Depends(get_db)) -> SessionDe
         session.status = "completed"
         db.commit()
         db.refresh(session)
-        return SessionDetailOut.model_validate(session)
+        detail = SessionDetailOut.model_validate(session)
+        detail.audio_url = get_session_audio_url(session, request)
+        return detail
     except Exception as exc:  # noqa: BLE001
         logger.exception("Analysis failed for session %s", session_id)
         session.status = "failed"

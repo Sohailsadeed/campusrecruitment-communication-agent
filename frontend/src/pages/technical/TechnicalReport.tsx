@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getTechnicalReport, TechnicalReportResponse } from "../../api/technical";
+import SentenceAnalysis from "../../components/Technical/SentenceAnalysis";
+import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
 
 export default function TechnicalReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -222,6 +224,11 @@ export default function TechnicalReport() {
           </button>
         </div>
       </div>
+
+      <VocalDeliveryCard
+        vocalDelivery={reportData.report?.vocal_delivery}
+        accent="secondary"
+      />
 
       {/* Hero Bento Cards Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 relative z-10">
@@ -497,6 +504,8 @@ export default function TechnicalReport() {
                         <p className="text-xs sm:text-sm text-on-surface-variant leading-relaxed font-body-md bg-surface-container-low p-3.5 rounded-lg border border-outline-variant/20 whitespace-pre-line">
                           {q.answer}
                         </p>
+
+                        <SentenceAnalysis sentences={q.sentences} audioUrl={q.audio_url} />
                       </div>
                     ) : (
                       <div className="text-xs text-outline italic">No spoken articulation recorded for this question.</div>

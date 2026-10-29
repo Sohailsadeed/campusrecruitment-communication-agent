@@ -1,4 +1,5 @@
 """Guesstimate & Market Sizing Round API endpoints."""
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -18,6 +19,8 @@ from app.services.guesstimate.question_bank import (
     get_metadata_summary,
     get_random_question,
 )
+from app.services.emotion import analyze_speech_emotion, get_session_emotion_summary
+from app.services.transcription import transcribe_audio
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -125,6 +128,7 @@ async def submit_guesstimate_answer(
 
     # Save candidate spoken audio if uploaded
     audio_url = None
+    dest = None
     if audio_file:
         try:
             audio_dir = settings.upload_dir / "guesstimate_audio"
@@ -139,17 +143,41 @@ async def submit_guesstimate_answer(
         except Exception as exc:
             logger.warning("Failed to save guesstimate audio: %s", exc)
 
+    candidate_answer = answer
+    vocal_delivery = {}
+    if dest and dest.exists():
+        transcription_res, emotion_res = await asyncio.gather(
+            asyncio.to_thread(transcribe_audio, dest, "small", False),
+            asyncio.to_thread(analyze_speech_emotion, dest),
+            return_exceptions=True,
+        )
+        if not isinstance(transcription_res, Exception) and transcription_res.get("text"):
+            candidate_answer = str(transcription_res["text"]).strip()
+        elif isinstance(transcription_res, Exception):
+            logger.warning("Guesstimate ASR failed for %s: %s", dest, transcription_res)
+
+        if isinstance(emotion_res, Exception):
+            logger.warning(
+                "Guesstimate emotion analysis failed for %s: %s", dest, emotion_res
+            )
+        else:
+            vocal_delivery = emotion_res or {}
+
     # Evaluate via Nemotron LLM
     eval_result = await evaluate_guesstimate(
         question=case.question,
         category=case.category,
         difficulty=case.difficulty,
-        candidate_answer=answer.strip(),
+        candidate_answer=candidate_answer.strip(),
         approach_type=approach_type or case.approach_type or "top_down",
     )
+    final_vocal_delivery = get_session_emotion_summary(
+        session.id, fallback=vocal_delivery
+    )
+    eval_result["vocal_delivery"] = final_vocal_delivery
 
     # Update GuesstimateCase record
-    case.candidate_answer = answer.strip()
+    case.candidate_answer = candidate_answer.strip()
     case.approach_type = approach_type or case.approach_type or "top_down"
     case.audio_url = audio_url or case.audio_url
     case.evaluation = eval_result
@@ -166,6 +194,7 @@ async def submit_guesstimate_answer(
         "overall_score": session.overall_score,
         "evaluation": eval_result,
         "audio_url": case.audio_url,
+        "vocal_delivery": final_vocal_delivery,
     }
 
 

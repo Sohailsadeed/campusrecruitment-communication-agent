@@ -273,7 +273,7 @@ export default function MetricsChart({ analysis }: MetricsChartProps) {
               <Clock className="w-4 h-4 text-violet-600" /> Acoustic Pauses &amp; Silence Analysis
             </h3>
             <p className="text-xs text-slate-500">
-              Measures silence gaps (&ge; 0.5s) between spoken words using millisecond word alignment.
+              Separates micro-hesitations (0.5s&ndash;1.19s) from real pauses (&ge; 1.2s) using millisecond word alignment.
             </p>
           </div>
           <span
@@ -293,13 +293,13 @@ export default function MetricsChart({ analysis }: MetricsChartProps) {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 pt-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
             <div className="text-2xl font-bold text-violet-600">
               {Number(jam.total_pause_time ?? 0).toFixed(1)}s
             </div>
             <div className="text-[11px] text-slate-500 font-medium mt-1">
-              Total Silence Duration
+              Real Pause Time
             </div>
           </div>
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -307,7 +307,7 @@ export default function MetricsChart({ analysis }: MetricsChartProps) {
               {Number(jam.pause_count ?? 0)}
             </div>
             <div className="text-[11px] text-slate-500 font-medium mt-1">
-              Pauses (&ge; 0.5s)
+              Pauses (&ge; 1.2s)
             </div>
           </div>
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
@@ -316,6 +316,14 @@ export default function MetricsChart({ analysis }: MetricsChartProps) {
             </div>
             <div className="text-[11px] text-slate-500 font-medium mt-1">
               Longest Single Freeze
+            </div>
+          </div>
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+            <div className="text-2xl font-bold text-sky-600">
+              {Number(jam.micro_hesitation_count ?? 0)}
+            </div>
+            <div className="text-[11px] text-slate-500 font-medium mt-1">
+              Micro-hesitations
             </div>
           </div>
         </div>

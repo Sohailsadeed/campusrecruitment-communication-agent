@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getGuesstimateReport, GuesstimateSessionResponse } from "../../api/guesstimate";
+import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
 
 export default function GuesstimateReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -190,6 +191,11 @@ export default function GuesstimateReport() {
           </button>
         </div>
       </div>
+
+      <VocalDeliveryCard
+        vocalDelivery={evaluation?.vocal_delivery}
+        accent="tertiary"
+      />
 
       {/* Case Problem Banner */}
       <div className="p-5 sm:p-6 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-2 shadow-sm print:border-black/20 print:bg-gray-50">

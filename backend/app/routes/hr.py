@@ -1,4 +1,5 @@
 """HR & Behavioral Round API endpoints."""
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,8 @@ from app.routes.auth import get_current_user
 from app.services.hr.evaluator import evaluate_hr_answer, generate_hr_report
 from app.services.hr.hr_service import pick_next_hr_question
 from app.services.hr.question_bank import get_hr_tracks, get_initial_hr_question, query_hr_questions
+from app.services.emotion import analyze_speech_emotion, get_session_emotion_summary
+from app.services.transcription import transcribe_audio
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -129,6 +132,7 @@ async def submit_hr_answer(
 
     # Save audio if uploaded
     audio_url = None
+    dest = None
     if audio_file:
         try:
             audio_dir = settings.upload_dir / "hr_audio"
@@ -144,19 +148,38 @@ async def submit_hr_answer(
         except Exception as exc:
             logger.warning("Failed to save HR spoken audio: %s", exc)
 
+    candidate_answer = answer
+    vocal_delivery = {}
+    if dest and dest.exists():
+        transcription_res, emotion_res = await asyncio.gather(
+            asyncio.to_thread(transcribe_audio, dest, "small", False),
+            asyncio.to_thread(analyze_speech_emotion, dest),
+            return_exceptions=True,
+        )
+        if not isinstance(transcription_res, Exception) and transcription_res.get("text"):
+            candidate_answer = str(transcription_res["text"]).strip()
+        elif isinstance(transcription_res, Exception):
+            logger.warning("HR ASR failed for %s: %s", dest, transcription_res)
+
+        if isinstance(emotion_res, Exception):
+            logger.warning("HR emotion analysis failed for %s: %s", dest, emotion_res)
+        else:
+            vocal_delivery = emotion_res or {}
+
     # Evaluate via Nemotron
     eval_result = await evaluate_hr_answer(
         role=hr.role,
         company=hr.target_company,
         track=curr_q.get("track", hr.interview_mode),
         question=curr_q.get("text", "Behavioral question"),
-        candidate_answer=answer.strip(),
+        candidate_answer=candidate_answer.strip(),
     )
 
     completed_question = {
         **curr_q,
-        "answer": answer.strip(),
+        "answer": candidate_answer.strip(),
         "audio_url": audio_url,
+        "vocal_delivery": vocal_delivery,
         "evaluation": eval_result,
     }
 
@@ -179,6 +202,9 @@ async def submit_hr_answer(
         )
         session.status = "completed"
         session.overall_score = float(report.get("total_score", 75))
+        report["vocal_delivery"] = get_session_emotion_summary(
+            session.id, fallback=vocal_delivery
+        )
         session.report = report
     else:
         next_q = pick_next_hr_question(
@@ -200,6 +226,7 @@ async def submit_hr_answer(
         "question_count": hr.question_count,
         "max_questions": hr.max_questions,
         "audio_url": audio_url,
+        "vocal_delivery": vocal_delivery,
     }
 
 

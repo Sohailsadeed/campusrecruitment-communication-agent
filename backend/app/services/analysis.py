@@ -167,6 +167,7 @@ def evaluate_jam_rules(
     speaking_pace: float,
     total_pause_time: float,
     longest_pause: float,
+    micro_hesitation_count: int = 0,
 ) -> Tuple[float, str, List[str]]:
     """Compute official JAM score (0-100), verdict label, and infractions list."""
     infractions: List[str] = []
@@ -178,7 +179,16 @@ def evaluate_jam_rules(
     if total_fillers > 0:
         infractions.append(f"Hesitation: {total_fillers} filler sound(s) detected (-{filler_penalty:.0f} pts)")
 
-    # Acoustic pause penalty (in 60s JAM, silence > 4s is an infraction)
+    # Micro-hesitations (0.5s-1.19s) are distinct from real pauses and carry a
+    # smaller penalty so sustained micro-stuttering is still visible.
+    micro_penalty = min(8.0, micro_hesitation_count * 0.8)
+    penalty += micro_penalty
+    if micro_hesitation_count > 0:
+        infractions.append(
+            f"Micro-hesitations: {micro_hesitation_count} short silence beat(s) detected (-{micro_penalty:.0f} pts)"
+        )
+
+    # Acoustic pause penalty (real pauses >= 1.2s; in 60s JAM, silence > 4s is an infraction)
     if total_pause_time > 4.0:
         pause_penalty = min(20.0, (total_pause_time - 3.0) * 2.5)
         penalty += pause_penalty
@@ -244,6 +254,8 @@ def analyze_transcription(
     total_pause_time = float(p_data.get("total_pause_time", 0.0))
     longest_pause = float(p_data.get("longest_pause", 0.0))
     pause_count = int(p_data.get("pause_count", 0))
+    micro_hesitation_count = int(p_data.get("micro_hesitation_count", 0))
+    micro_hesitation_time = float(p_data.get("micro_hesitation_time", 0.0))
 
     jam_score, jam_verdict, infractions = evaluate_jam_rules(
         total_words=words,
@@ -253,6 +265,7 @@ def analyze_transcription(
         speaking_pace=pace,
         total_pause_time=total_pause_time,
         longest_pause=longest_pause,
+        micro_hesitation_count=micro_hesitation_count,
     )
 
     return {
@@ -271,4 +284,6 @@ def analyze_transcription(
         "total_pause_time": total_pause_time,
         "pause_count": pause_count,
         "longest_pause": longest_pause,
+        "micro_hesitation_count": micro_hesitation_count,
+        "micro_hesitation_time": micro_hesitation_time,
     }

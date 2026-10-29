@@ -24,6 +24,7 @@ class InterviewState(TypedDict):
     questions: List[Dict[str, Any]]
     current_question: Optional[Dict[str, Any]]
     answer: Optional[str]
+    answer_sentences: Optional[List[Dict[str, Any]]]
     evaluation: Optional[Dict[str, Any]]
     question_count: int
     max_questions: int
@@ -72,6 +73,7 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
         question=curr_q,
         answer=answer,
         resume_context=state.get("resume_context", ""),
+        sentences=state.get("answer_sentences"),
     )
 
     completed_question = {
@@ -87,6 +89,8 @@ async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
         "jargon_critique": evaluation.get("jargon_critique", "Explained with applied intuition."),
         "star_breakdown": evaluation.get("star_breakdown", {}),
         "ideal_concise_script": evaluation.get("ideal_concise_script", ""),
+        "conclusion_checkpoint_index": evaluation.get("conclusion_checkpoint_index"),
+        "sentences": evaluation.get("sentences", []),
     }
 
     questions = list(state.get("questions", []))

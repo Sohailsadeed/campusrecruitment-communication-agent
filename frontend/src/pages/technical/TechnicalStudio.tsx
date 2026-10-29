@@ -9,6 +9,8 @@ import {
   getTechnicalSession,
   QuestionItem,
 } from "../../api/technical";
+import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
+import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
 
 const ROLE_PRESETS = [
   { label: "Full Stack Engineer", icon: "layers", desc: "React, Node.js, distributed caches, and system design" },
@@ -94,6 +96,7 @@ export default function TechnicalStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
 
   // Check if candidate already has an indexed resume from a prior session
   useEffect(() => {
@@ -855,6 +858,10 @@ export default function TechnicalStudio() {
             </button>
           </div>
         </div>
+
+        {isRecording && (
+          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
+        )}
 
         <textarea
           rows={6}

@@ -1,4 +1,5 @@
 """FastAPI routes for Technical Round mock interviews."""
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -12,9 +13,15 @@ from app.models.session import Session as SessionModel
 from app.models.technical import TechnicalInterview
 from app.models.user import User
 from app.routes.auth import get_current_user, get_optional_current_user
+from app.services.emotion import analyze_speech_emotion, get_session_emotion_summary
 from app.services.technical.interview_graph import interview_graph
 from app.services.technical.memory import get_user_history, store_performance
 from app.services.technical.rag import process_resume, retrieve_context
+from app.services.technical.sentence_analysis import (
+    build_sentences_from_text,
+    build_sentences_from_words,
+)
+from app.services.transcription import transcribe_audio
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -244,20 +251,56 @@ async def submit_technical_answer(
 
     # Save audio if uploaded
     audio_url = None
+    audio_path: Optional[Path] = None
     if audio_file:
         try:
             audio_dir = settings.upload_dir / "technical_audio"
             audio_dir.mkdir(parents=True, exist_ok=True)
             q_num = (tech.question_count or 0) + 1
             filename = f"session_{session.id}_q_{q_num}_{current_user.id}.webm"
-            dest = audio_dir / filename
+            audio_path = audio_dir / filename
             content = await audio_file.read()
-            with open(dest, "wb") as f:
+            with open(audio_path, "wb") as f:
                 f.write(content)
             audio_url = f"/api/technical/audio/{filename}"
-            logger.info("Saved technical spoken audio: %s", dest)
+            logger.info("Saved technical spoken audio: %s", audio_path)
         except Exception as exc:
             logger.warning("Failed to save spoken audio: %s", exc)
+            audio_path = None
+
+    # Server-side ASR gives deterministic sentence spans for the report. Mock
+    # transcripts are disabled for graded rounds; fall back to submitted text.
+    candidate_answer = answer
+    answer_sentences: List[Dict[str, Any]] = []
+    vocal_delivery: Dict[str, Any] = {}
+    if audio_path:
+        transcription_res, emotion_res = await asyncio.gather(
+            asyncio.to_thread(transcribe_audio, audio_path, "small", False),
+            asyncio.to_thread(analyze_speech_emotion, audio_path),
+            return_exceptions=True,
+        )
+
+        if isinstance(transcription_res, Exception):
+            logger.warning(
+                "Technical ASR failed for %s: %s", audio_path, transcription_res
+            )
+        else:
+            asr_text = str(transcription_res.get("text") or "").strip()
+            asr_words = transcription_res.get("words") or []
+            if asr_words:
+                answer_sentences = build_sentences_from_words(asr_words)
+            if asr_text:
+                candidate_answer = asr_text
+
+        if isinstance(emotion_res, Exception):
+            logger.warning(
+                "Technical emotion analysis failed for %s: %s", audio_path, emotion_res
+            )
+        else:
+            vocal_delivery = emotion_res or {}
+
+    if not answer_sentences:
+        answer_sentences = build_sentences_from_text(candidate_answer)
 
     # Prepare LangGraph state
     round_meta = session.round_metadata or {}
@@ -271,7 +314,8 @@ async def submit_technical_answer(
         "resume_context": tech.resume_context or "",
         "questions": list(tech.questions or []),
         "current_question": tech.current_question,
-        "answer": answer,
+        "answer": candidate_answer,
+        "answer_sentences": answer_sentences,
         "evaluation": None,
         "question_count": tech.question_count,
         "max_questions": tech.max_questions,
@@ -291,6 +335,8 @@ async def submit_technical_answer(
     updated_questions = list(graph_res.get("questions", tech.questions) or [])
     if updated_questions and audio_url:
         updated_questions[-1]["audio_url"] = audio_url
+    if updated_questions:
+        updated_questions[-1]["vocal_delivery"] = vocal_delivery
 
     tech.questions = updated_questions
     tech.question_count = graph_res.get("question_count", tech.question_count + 1)
@@ -299,6 +345,9 @@ async def submit_technical_answer(
     if is_complete and report:
         session.status = "completed"
         session.overall_score = float(report.get("total_score", 75))
+        report["vocal_delivery"] = get_session_emotion_summary(
+            session.id, fallback=vocal_delivery
+        )
         session.report = report
 
         # Store Mem0 cross-session memory
@@ -323,6 +372,7 @@ async def submit_technical_answer(
         "question_count": tech.question_count,
         "max_questions": tech.max_questions,
         "audio_url": audio_url,
+        "vocal_delivery": vocal_delivery,
     }
 
 

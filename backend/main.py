@@ -11,7 +11,7 @@ from app.database.seed_hr import seed_hr_questions
 from app.models import AIFeedback, CurriculumPlan, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
 import sys
 from logging.handlers import RotatingFileHandler
-from app.routes import analysis, auth, coach, feedback, guesstimate, hr, progress, sessions, technical
+from app.routes import analysis, auth, coach, emotion_stream, feedback, guesstimate, hr, progress, sessions, technical
 from config import settings
 
 # Configure structured file and console logging
@@ -82,6 +82,7 @@ def create_app() -> FastAPI:
     app.include_router(guesstimate.router)
     app.include_router(hr.router)
     app.include_router(coach.router)
+    app.include_router(emotion_stream.router)
 
     @app.on_event("startup")
     def on_startup() -> None:

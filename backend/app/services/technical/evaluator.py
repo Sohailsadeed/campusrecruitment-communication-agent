@@ -1,12 +1,17 @@
 """Technical interview evaluator using OpenRouter Nemotron with local Ollama fallback."""
 import logging
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from app.services.technical.sentence_analysis import (
+    apply_sentence_labels,
+    build_sentences_from_text,
+    format_sentences_for_prompt,
+)
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -113,6 +118,14 @@ class EvaluationSchema(BaseModel):
     ideal_concise_script: str = Field(
         default="",
         description="An exemplary, high-impact 45-60 second verbal articulation of how a top student candidate should answer this question",
+    )
+    conclusion_checkpoint_index: Optional[int] = Field(
+        default=None,
+        description="Index of the sentence where the core answer is complete; any post-checkpoint padding is rambling",
+    )
+    rambling_indices: List[int] = Field(
+        default_factory=list,
+        description="Indices of sentences after the conclusion checkpoint that are circular, padded, or unnecessary",
     )
 
 
@@ -272,6 +285,12 @@ _evaluation_prompt = ChatPromptTemplate.from_messages(
             "- Mark true/false for each in star_breakdown and provide actionable structure_feedback.\n\n"
             "4. IDEAL CONCISE SCRIPT:\n"
             "- Write an ideal 45-60 second verbal script (ideal_concise_script) demonstrating how a stellar candidate would concisely articulate this answer without jargon overload or rambling.\n\n"
+            "5. SENTENCE-LEVEL CONCLUSION CHECKPOINT:\n"
+            "- The candidate's answer will be supplied as numbered sentences.\n"
+            "- Identify conclusion_checkpoint_index: the sentence index where the core answer is complete and they should have stopped.\n"
+            "- Identify rambling_indices: only sentence indices AFTER the checkpoint that are circular, padded, or unnecessary. Never mark the checkpoint itself or earlier core-answer sentences.\n"
+            "- Use only the supplied sentence indices. Never invent indices, quotes, or timestamps.\n"
+            "- If the answer ends cleanly at the core point, set conclusion_checkpoint_index to the final sentence and rambling_indices to [].\n\n"
             "{format_instructions}",
         ),
         (
@@ -279,6 +298,7 @@ _evaluation_prompt = ChatPromptTemplate.from_messages(
             "Question: {question_text}\n"
             "Question Type: {question_type}\n"
             "Candidate's Answer: {answer}\n\n"
+            "Numbered Candidate Sentences (index -> sentence):\n{sentence_block}\n\n"
             "Resume Context:\n{resume_context}",
         ),
     ]
@@ -374,13 +394,22 @@ async def generate_question(
 
 
 async def evaluate_answer(
-    question: dict, answer: str, resume_context: str
+    question: dict,
+    answer: str,
+    resume_context: str,
+    sentences: Optional[List[Dict[str, Any]]] = None,
 ) -> dict:
-    """Evaluate candidate answer using LangChain LCEL."""
+    """Evaluate candidate answer using LangChain LCEL.
+
+    ``sentences`` may carry deterministic ASR timestamps. The LLM only labels
+    sentence indices; timings are always derived from the supplied spans.
+    """
     default_fallback = {
         "score": 6,
         "feedback": "Answer recorded. Continue to expand with specific examples and technical depth.",
     }
+    base_sentences = sentences if sentences else build_sentences_from_text(answer)
+    sentence_block = format_sentences_for_prompt(base_sentences)
 
     try:
         chain = _evaluation_prompt | _get_llm() | _evaluation_parser
@@ -389,6 +418,7 @@ async def evaluate_answer(
                 "question_text": question.get("text", "Interview question"),
                 "question_type": question.get("type", "behavioral"),
                 "answer": answer,
+                "sentence_block": sentence_block,
                 "resume_context": resume_context or "General role context",
                 "format_instructions": _evaluation_parser.get_format_instructions(),
             }
@@ -423,12 +453,26 @@ async def evaluate_answer(
                 "structure_feedback": "Structure verified.",
             }
 
+        rambling_critique = str(
+            result.get("rambling_critique")
+            or "Direct delivery without circular repetition."
+        )
+        tagged_sentences, checkpoint = apply_sentence_labels(
+            base_sentences,
+            result.get("conclusion_checkpoint_index", result.get("checkpoint_index")),
+            result.get("rambling_indices", result.get("rambling_sentence_indices", [])),
+            rambling_critique,
+        )
+        rambling_detected = bool(result.get("rambling_detected", False)) or any(
+            s.get("is_rambling") for s in tagged_sentences
+        )
+
         return {
             "score": score if (1 <= score <= 10) else 7,
             "feedback": str(result.get("feedback") or default_fallback["feedback"]),
             "conciseness_score": max(1, min(10, conciseness_score)),
-            "rambling_detected": bool(result.get("rambling_detected", False)),
-            "rambling_critique": str(result.get("rambling_critique") or "Direct delivery without circular repetition."),
+            "rambling_detected": rambling_detected,
+            "rambling_critique": rambling_critique,
             "jargon_vs_understanding": str(result.get("jargon_vs_understanding") or "applied_intuition"),
             "applied_understanding_score": max(1, min(10, applied_score)),
             "jargon_critique": str(result.get("jargon_critique") or "Explained with practical intuition."),
@@ -440,6 +484,8 @@ async def evaluate_answer(
                 "structure_feedback": str(star.get("structure_feedback") or "Good coverage of the STAR method."),
             },
             "ideal_concise_script": str(result.get("ideal_concise_script") or ""),
+            "conclusion_checkpoint_index": checkpoint,
+            "sentences": tagged_sentences,
         }
     except Exception as exc:
         logger.warning("Answer evaluation failed (%s). Using fallback evaluation.", exc)
@@ -459,6 +505,8 @@ async def evaluate_answer(
                 "structure_feedback": "Solid communication flow.",
             },
             "ideal_concise_script": "",
+            "conclusion_checkpoint_index": None,
+            "sentences": base_sentences,
         }
 
 

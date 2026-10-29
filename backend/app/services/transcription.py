@@ -2,8 +2,12 @@
 
 Uses Faster-Whisper with word_timestamps=True to capture:
 1. Exact hesitation disfluencies ('uh', 'uhh', 'um', 'umm', 'hmm') without suppression
-2. Acoustic pause boundaries (silence gaps >= 0.5s between spoken words)
-3. Full transcript and word-level timing
+2. Micro-hesitations (silence gaps 0.5s-1.19s between spoken words)
+3. Real pauses (silence gaps >= 1.2s between spoken words)
+4. Full transcript and word-level timing
+
+Silero VAD (min_silence_duration_ms=500) is used only for utterance segmentation;
+pause metrics are calculated independently from word-level timestamp gaps.
 """
 from __future__ import annotations
 
@@ -91,42 +95,85 @@ def _get_faster_whisper_model(model_size: str = "small"):
 
 
 def _calculate_pauses(
-    words: List[Dict[str, Any]], pause_threshold: float = 0.5
+    words: List[Dict[str, Any]],
+    micro_threshold: float = 0.5,
+    pause_threshold: float = 1.2,
 ) -> Dict[str, Any]:
-    """Calculate silence pauses between consecutive words."""
+    """Classify silence gaps as micro-hesitations or real pauses.
+
+    A gap between consecutive spoken words is measured independently of Silero
+    VAD segmentation. Gaps in [micro_threshold, pause_threshold) are short
+    hesitation beats; gaps >= pause_threshold are substantive pauses.
+    """
     pauses: List[Dict[str, Any]] = []
+    micro_hesitations: List[Dict[str, Any]] = []
+
     for i in range(len(words) - 1):
         w_curr = words[i]
         w_next = words[i + 1]
-        gap = round(float(w_next["start"]) - float(w_curr["end"]), 2)
-        if gap >= pause_threshold:
-            pauses.append(
-                {
-                    "start": round(float(w_curr["end"]), 2),
-                    "end": round(float(w_next["start"]), 2),
-                    "duration": gap,
-                    "after_word": str(w_curr["word"]).strip(),
-                    "before_word": str(w_next["word"]).strip(),
-                }
-            )
+        raw_gap = float(w_next["start"]) - float(w_curr["end"])
+        gap = round(raw_gap, 2)
+        if raw_gap < micro_threshold:
+            continue
+
+        event = {
+            "start": round(float(w_curr["end"]), 2),
+            "end": round(float(w_next["start"]), 2),
+            "duration": gap,
+            "after_word": str(w_curr["word"]).strip(),
+            "before_word": str(w_next["word"]).strip(),
+        }
+        if raw_gap >= pause_threshold:
+            pauses.append(event)
+        else:
+            micro_hesitations.append(event)
 
     total_pause_time = round(sum(p["duration"] for p in pauses), 2)
     pause_count = len(pauses)
     longest_pause = max((p["duration"] for p in pauses), default=0.0)
+    micro_hesitation_time = round(
+        sum(m["duration"] for m in micro_hesitations), 2
+    )
 
     return {
         "pauses": pauses,
         "total_pause_time": total_pause_time,
         "pause_count": pause_count,
         "longest_pause": longest_pause,
+        "micro_hesitations": micro_hesitations,
+        "micro_hesitation_count": len(micro_hesitations),
+        "micro_hesitation_time": micro_hesitation_time,
+    }
+
+
+def _empty_transcription() -> Dict[str, Any]:
+    """Return an explicit empty transcription when mock output is not allowed."""
+    return {
+        "text": "",
+        "language": "en",
+        "confidence": 0.0,
+        "words": [],
+        "segments": [],
+        "pauses": [],
+        "total_pause_time": 0.0,
+        "pause_count": 0,
+        "longest_pause": 0.0,
+        "micro_hesitations": [],
+        "micro_hesitation_count": 0,
+        "micro_hesitation_time": 0.0,
     }
 
 
 def transcribe_audio(
     audio_path: Optional[Path],
     model_name: str = "small",
+    allow_mock: bool = True,
 ) -> Dict[str, Any]:
-    """Transcribe an audio file with verbatim hesitation capture and pause analysis."""
+    """Transcribe an audio file with verbatim hesitation capture and pause analysis.
+
+    When ``allow_mock`` is False (used by graded spoken rounds), failure to load
+    a real ASR engine returns an empty result instead of fabricated speech.
+    """
     if audio_path is not None and Path(audio_path).exists():
         # 1. Primary: Faster-Whisper with word_timestamps
         if _FASTER_WHISPER_AVAILABLE:
@@ -243,6 +290,13 @@ def transcribe_audio(
                 }
             except Exception as exc:
                 logger.warning("OpenAI Whisper fallback failed: %s", exc)
+
+    if not allow_mock:
+        logger.warning(
+            "No real ASR engine available for %s; skipping mock fallback.",
+            audio_path,
+        )
+        return _empty_transcription()
 
     # 3. Deterministic Mock fallback
     seed = abs(hash(str(audio_path) or "default"))

@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import type { VocalDelivery } from "../types";
 
 export interface ModelTreeStep {
   step_name: string;
@@ -114,6 +115,7 @@ export interface GuesstimateEvaluation {
   weaknesses: string[];
   ideal_verbal_script: string;
   executive_summary: string;
+  vocal_delivery?: VocalDelivery;
 }
 
 export interface GuesstimateSessionResponse {

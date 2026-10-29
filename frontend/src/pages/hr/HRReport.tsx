@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getHRReport, HRSessionResponse, HRQuestionItem } from "../../api/hr";
+import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
 
 export default function HRReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -176,6 +177,11 @@ export default function HRReport() {
           </button>
         </div>
       </div>
+
+      <VocalDeliveryCard
+        vocalDelivery={reportSummary?.vocal_delivery}
+        accent="primary"
+      />
 
       {/* Top Banner: Score & 3 Diagnostic Pillars */}
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-4 gap-4 print:grid-cols-4">

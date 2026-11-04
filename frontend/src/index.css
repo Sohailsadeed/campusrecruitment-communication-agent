@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+    background-color: #10131a;
+  }
+
+  body {
+    @apply bg-surface text-on-surface antialiased;
+  }
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .card-surface {
+    @apply bg-surface-container-low border border-outline-variant/30 rounded-xl;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium
+      bg-primary text-on-primary hover:bg-primary-fixed-dim transition-all shadow-md
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium
+      bg-surface-container-high text-on-surface hover:bg-surface-container-highest transition-colors;
+  }
+}
+
+::selection {
+  background: #8083ff;
+  color: #0d0096;
+}
+

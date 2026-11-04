@@ -12,5 +12,11 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: [
+      "moistness-rigor-epiphany.ngrok-free.dev",
+      ".ngrok-free.dev",
+      ".ngrok.io",
+      ".ngrok-free.app",
+    ],
   },
 });

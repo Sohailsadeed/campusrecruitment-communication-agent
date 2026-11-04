@@ -1,9 +1,11 @@
-"""JAM & Multimodal LLM-backed feedback evaluation via Ollama."""
+"""JAM & Multimodal LLM-backed feedback evaluation via OpenRouter with Ollama fallback."""
 from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -422,21 +424,106 @@ def _heuristic_feedback(
     }
 
 
-def generate_feedback(
-    metrics: Dict[str, Any],
-    transcript: str,
-    topic: str = "Impromptu Speech",
-    prosody_metrics: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """Generate comprehensive VerbalIQ feedback with rewrites, competencies, and multimodal congruence."""
-    prosody = prosody_metrics or metrics.get("prosody") or {}
-    prompt = _build_prompt(metrics, transcript, topic, prosody_metrics=prosody)
-    url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
-    fallback = _heuristic_feedback(metrics, topic, transcript, prosody_metrics=prosody)
+def _get_openrouter_api_key() -> Optional[str]:
+    """Retrieve OpenRouter API key from .env, environment, or settings."""
+    try:
+        from dotenv import dotenv_values
+        backend_dir = Path(__file__).resolve().parent.parent.parent
+        env_path = backend_dir / ".env"
+        if env_path.exists():
+            env_vals = dotenv_values(str(env_path))
+            key = env_vals.get("OPENROUTER_API_KEY")
+            if key and (key.startswith("sk-or-") or key.startswith("sk-")):
+                return key.strip()
+    except Exception as exc:
+        logger.debug("Failed to read .env file for OpenRouter key: %s", exc)
 
-    # 1. Attempt with exact JSON Schema
+    key = os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
+    if key and (key.startswith("sk-or-") or key.startswith("sk-")):
+        return key.strip()
+    return None
+
+
+def _call_openrouter(prompt: str, api_key: str) -> Optional[Dict[str, Any]]:
+    """Call OpenRouter chat completions API with the JAM feedback prompt."""
+    openrouter_url = f"{settings.openrouter_base_url.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "HTTP-Referer": "https://speakflow.local",
+        "X-Title": "SpeakFlow JAM Evaluator",
+        "Content-Type": "application/json",
+    }
+
+    payloads = [
+        {
+            "model": settings.chat_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Chief Adjudicator & Executive Communication Coach for high-stakes interviews. "
+                        "You must respond ONLY with a valid, parseable JSON object adhering to the schema. "
+                        "Do not include markdown code fences, greetings, or extra commentary."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.25,
+            "response_format": {"type": "json_object"},
+        },
+        {
+            "model": settings.chat_model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert Chief Adjudicator & Executive Communication Coach for high-stakes interviews. "
+                        "Respond ONLY with valid JSON. No markdown fences, no explanations."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.25,
+        },
+    ]
+
+    for payload in payloads:
+        try:
+            logger.info("Calling OpenRouter LLM (%s) for JAM feedback...", settings.chat_model)
+            response = requests.post(
+                openrouter_url,
+                headers=headers,
+                json=payload,
+                timeout=settings.llm_timeout_seconds,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices") or []
+            if not choices:
+                continue
+            content = choices[0].get("message", {}).get("content", "").strip()
+            if not content:
+                continue
+            start_idx = content.find("{")
+            end_idx = content.rfind("}")
+            if start_idx != -1 and end_idx != -1:
+                content = content[start_idx : end_idx + 1]
+            parsed = json.loads(content)
+            if isinstance(parsed, dict) and ("content" in parsed or "score" in parsed or "rewrites" in parsed):
+                logger.info("Successfully generated JAM feedback via OpenRouter (%s)", settings.chat_model)
+                return parsed
+        except Exception as exc:
+            logger.debug("OpenRouter attempt failed: %s", exc)
+            continue
+    return None
+
+
+def _call_ollama(prompt: str) -> Optional[Dict[str, Any]]:
+    """Call local Ollama /api/generate endpoint with the JAM feedback prompt as fallback."""
+    url = f"{settings.ollama_base_url.rstrip('/')}/api/generate"
     for fmt in [FEEDBACK_JSON_SCHEMA, "json"]:
         try:
+            logger.info("Calling local Ollama (%s at %s) for JAM feedback...", settings.ollama_model, settings.ollama_base_url)
             response = requests.post(
                 url,
                 json={
@@ -458,49 +545,81 @@ def generate_feedback(
             if start_idx != -1 and end_idx != -1:
                 raw = raw[start_idx : end_idx + 1]
             parsed = json.loads(raw)
-
-            competencies = parsed.get("competencies") or fallback["competencies"]
-            # Enforce 100% DSP acoustic confidence — completely decoupled from video/eye contact
-            if "confidence_score" in prosody:
-                competencies["confidence"] = int(round(float(prosody["confidence_score"])))
-
-            raw_rewrites = parsed.get("rewrites") or fallback.get("rewrites", [])
-            normalized_rewrites = []
-            for idx, rw in enumerate(raw_rewrites):
-                ts = str(rw.get("timestamp") or "").strip()
-                if not ts or ts == "00:00":
-                    ts = f"00:{9 + idx * 19:02d}"
-                orig = str(rw.get("original", "")).strip().strip('"').strip("'")
-                pol = str(rw.get("polish", "")).strip().strip('"').strip("'")
-                normalized_rewrites.append({
-                    "timestamp": ts,
-                    "original": f'"{orig}"' if orig else fallback["rewrites"][0]["original"],
-                    "polish": f'"{pol}"' if pol else fallback["rewrites"][0]["polish"],
-                    "grade": str(rw.get("grade") or ("C-" if idx % 2 == 0 else "D+")).strip(),
-                    "polish_grade": str(rw.get("polish_grade") or "A+").strip(),
-                    "tip": str(rw.get("tip") or "Anchor with specific metrics and direct ownership phrasing.").strip(),
-                })
-
-            # Guarantee multiple in-context suggestions if LLM returned only 1
-            if len(normalized_rewrites) < 2 and fallback.get("rewrites"):
-                for extra in fallback["rewrites"][len(normalized_rewrites):]:
-                    normalized_rewrites.append(extra)
-
-            return {
-                "content": str(parsed.get("content", "")).strip() or fallback["content"],
-                "score": float(parsed.get("score", metrics.get("jam_score", 0)) or fallback["score"]),
-                "suggestions": [str(s) for s in parsed.get("suggestions", [])][:5] or fallback["suggestions"],
-                "congruence": parsed.get("congruence") or fallback["congruence"],
-                "avatar_reaction": parsed.get("avatar_reaction") or fallback["avatar_reaction"],
-                "rewrites": normalized_rewrites or fallback["rewrites"],
-                "competencies": competencies,
-                "mastery_points": parsed.get("mastery_points") or fallback["mastery_points"],
-                "curated_drills": parsed.get("curated_drills") or fallback["curated_drills"],
-            }
+            if isinstance(parsed, dict):
+                logger.info("Successfully generated JAM feedback via Ollama (%s)", settings.ollama_model)
+                return parsed
         except Exception as exc:
             logger.debug("Ollama format %s failed: %s", fmt, exc)
             continue
+    return None
 
-    logger.warning("Ollama unavailable at %s. Used enhanced linguistic fallback.", url)
-    return fallback
 
+def generate_feedback(
+    metrics: Dict[str, Any],
+    transcript: str,
+    topic: str = "Impromptu Speech",
+    prosody_metrics: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Generate comprehensive VerbalIQ feedback with rewrites, competencies, and multimodal congruence.
+    Prioritizes OpenRouter, falling back to local Ollama, and finally enhanced linguistic heuristic.
+    """
+    prosody = prosody_metrics or metrics.get("prosody") or {}
+    prompt = _build_prompt(metrics, transcript, topic, prosody_metrics=prosody)
+    fallback = _heuristic_feedback(metrics, topic, transcript, prosody_metrics=prosody)
+
+    parsed = None
+    openrouter_key = _get_openrouter_api_key()
+
+    # 1. Primary path: OpenRouter if API key is configured
+    if openrouter_key:
+        parsed = _call_openrouter(prompt, openrouter_key)
+        if not parsed:
+            logger.warning("OpenRouter failed for JAM feedback. Attempting local Ollama fallback...")
+
+    # 2. Secondary path: Local Ollama fallback if OpenRouter not configured or failed
+    if not parsed:
+        parsed = _call_ollama(prompt)
+
+    # 3. Tertiary path: If both LLMs unavailable, use enhanced deterministic heuristic
+    if not parsed:
+        logger.warning("Both OpenRouter and Ollama unavailable. Used enhanced linguistic fallback for JAM.")
+        return fallback
+
+    # Normalize parsed data
+    competencies = parsed.get("competencies") or fallback["competencies"]
+    if "confidence_score" in prosody:
+        competencies["confidence"] = int(round(float(prosody["confidence_score"])))
+
+    raw_rewrites = parsed.get("rewrites") or fallback.get("rewrites", [])
+    normalized_rewrites = []
+    for idx, rw in enumerate(raw_rewrites):
+        ts = str(rw.get("timestamp") or "").strip()
+        if not ts or ts == "00:00":
+            ts = f"00:{9 + idx * 19:02d}"
+        orig = str(rw.get("original", "")).strip().strip('"').strip("'")
+        pol = str(rw.get("polish", "")).strip().strip('"').strip("'")
+        normalized_rewrites.append({
+            "timestamp": ts,
+            "original": f'"{orig}"' if orig else fallback["rewrites"][0]["original"],
+            "polish": f'"{pol}"' if pol else fallback["rewrites"][0]["polish"],
+            "grade": str(rw.get("grade") or ("C-" if idx % 2 == 0 else "D+")).strip(),
+            "polish_grade": str(rw.get("polish_grade") or "A+").strip(),
+            "tip": str(rw.get("tip") or "Anchor with specific metrics and direct ownership phrasing.").strip(),
+        })
+
+    # Guarantee multiple in-context suggestions if LLM returned only 1
+    if len(normalized_rewrites) < 2 and fallback.get("rewrites"):
+        for extra in fallback["rewrites"][len(normalized_rewrites):]:
+            normalized_rewrites.append(extra)
+
+    return {
+        "content": str(parsed.get("content", "")).strip() or fallback["content"],
+        "score": float(parsed.get("score", metrics.get("jam_score", 0)) or fallback["score"]),
+        "suggestions": [str(s) for s in parsed.get("suggestions", [])][:5] or fallback["suggestions"],
+        "congruence": parsed.get("congruence") or fallback["congruence"],
+        "avatar_reaction": parsed.get("avatar_reaction") or fallback["avatar_reaction"],
+        "rewrites": normalized_rewrites or fallback["rewrites"],
+        "competencies": competencies,
+        "mastery_points": parsed.get("mastery_points") or fallback["mastery_points"],
+        "curated_drills": parsed.get("curated_drills") or fallback["curated_drills"],
+    }

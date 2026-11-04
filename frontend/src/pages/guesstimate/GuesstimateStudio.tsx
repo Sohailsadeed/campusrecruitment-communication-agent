@@ -8,9 +8,6 @@ import {
   getGuesstimateSession,
   GuesstimateMetadataResponse,
 } from "../../api/guesstimate";
-import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
-import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
-import LiveCoachNudge from "../../components/Interview/LiveCoachNudge";
 
 const CATEGORY_CARDS = [
   {
@@ -100,11 +97,7 @@ export default function GuesstimateStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { liveEmotion, nudge } = useLiveEmotionStream(sessionId, isRecording, {
-    category,
-    question: activeQuestion,
-    partialTranscript: answerText,
-  });
+  const baseTextRef = useRef<string>("");
 
   // 1. Fetch metadata on mount
   useEffect(() => {
@@ -180,11 +173,12 @@ export default function GuesstimateStudio() {
       recognition.lang = "en-US";
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let sessionTranscript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          sessionTranscript += event.results[i][0].transcript;
         }
-        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        const base = baseTextRef.current;
+        setAnswerText(base ? `${base} ${sessionTranscript.trimStart()}` : sessionTranscript);
       };
 
       recognition.onerror = () => setIsRecording(false);
@@ -229,6 +223,7 @@ export default function GuesstimateStudio() {
       }
       setIsRecording(false);
     } else {
+      baseTextRef.current = answerText.trim();
       setErrorMsg(null);
       audioChunksRef.current = [];
       try {
@@ -276,6 +271,7 @@ export default function GuesstimateStudio() {
       setActiveQuestion(res.question);
       setElapsedSeconds(0);
       setAnswerText("");
+      baseTextRef.current = "";
       setRecordedAudioBlob(null);
       localStorage.setItem("speakflow_active_guesstimate_session", String(res.session_id));
       handleSpeakQuestion(res.question);
@@ -765,12 +761,6 @@ export default function GuesstimateStudio() {
             <span>{isRecording ? "Finish Speaking" : "Answer Verbally (Microphone)"}</span>
           </button>
         </div>
-
-        {isRecording && (
-          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
-        )}
-
-        <LiveCoachNudge nudge={nudge} />
 
         {/* Articulation Text Area */}
         <textarea

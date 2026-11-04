@@ -8,8 +8,6 @@ import {
   HRQuestionItem,
   HRTrackInfo,
 } from "../../api/hr";
-import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
-import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
 
 const ROLE_PRESETS = [
   "Software Development Engineer",
@@ -57,7 +55,7 @@ export default function HRStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
+  const baseTextRef = useRef<string>("");
 
   // 1. Fetch tracks on mount
   useEffect(() => {
@@ -121,11 +119,12 @@ export default function HRStudio() {
       recognition.lang = "en-US";
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let sessionTranscript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          sessionTranscript += event.results[i][0].transcript;
         }
-        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        const base = baseTextRef.current;
+        setAnswerText(base ? `${base} ${sessionTranscript.trimStart()}` : sessionTranscript);
       };
 
       recognition.onerror = () => setIsRecording(false);
@@ -158,6 +157,7 @@ export default function HRStudio() {
       }
       setIsRecording(false);
     } else {
+      baseTextRef.current = answerText.trim();
       setErrorMsg(null);
       audioChunksRef.current = [];
       try {
@@ -206,6 +206,7 @@ export default function HRStudio() {
       setQuestionCount(0);
       setElapsedSeconds(0);
       setAnswerText("");
+      baseTextRef.current = "";
       setRecordedAudioBlob(null);
       localStorage.setItem("speakflow_active_hr_session", String(res.session_id));
       if (res.current_question?.text) {
@@ -249,6 +250,7 @@ export default function HRStudio() {
         setCurrentQuestion(res.next_question);
         setQuestionCount(res.question_count);
         setAnswerText("");
+        baseTextRef.current = "";
         setRecordedAudioBlob(null);
         if (res.next_question.text) {
           handleSpeakQuestion(res.next_question.text);
@@ -668,10 +670,6 @@ export default function HRStudio() {
             <span>{isRecording ? "Finish Speaking" : "Answer Verbally (Microphone)"}</span>
           </button>
         </div>
-
-        {isRecording && (
-          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
-        )}
 
         <textarea
           rows={9}

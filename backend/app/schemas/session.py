@@ -67,7 +67,6 @@ class SessionDetailOut(SessionOut):
     transcription: Optional[TranscriptionOut] = None
     analysis: Optional[SessionAnalysisOut] = None
     feedback: List["AIFeedbackOut"] = []  # noqa: F821
-    audio_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

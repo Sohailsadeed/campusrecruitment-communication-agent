@@ -101,8 +101,6 @@ export interface VerbalIQReport {
     filler_words_count: number;
     total_pause_time: number;
     pause_count: number;
-    micro_hesitation_count?: number;
-    micro_hesitation_time?: number;
     repetitions_count: number;
     eye_contact_percentage?: number;
     posture_quality?: number;
@@ -144,11 +142,6 @@ export interface JamData {
   repetitions_count?: number;
   repeated_words?: Record<string, number>;
   jam_infractions?: string[];
-  total_pause_time?: number;
-  pause_count?: number;
-  longest_pause?: number;
-  micro_hesitation_count?: number;
-  micro_hesitation_time?: number;
 }
 
 export interface SessionAnalysis {
@@ -177,7 +170,6 @@ export interface SessionDetail extends SessionSummary {
   transcription: Transcription | null;
   analysis: SessionAnalysis | null;
   feedback: AIFeedback[];
-  audio_url?: string | null;
 }
 
 export interface ProgressSummary {
@@ -202,33 +194,4 @@ export interface ProgressMetric {
   filler_words_count: number;
   eye_contact_percentage: number;
   posture_quality: number;
-}
-
-export interface VocalDeliverySummary {
-  confidence_score: number;
-  nervousness_score: number;
-  composure_score: number;
-  delivery_style: string;
-  peak_nervous_second?: number | null;
-}
-
-export interface VocalDeliveryTimelinePoint {
-  start_sec?: number | null;
-  end_sec?: number | null;
-  confidence: number;
-  nervousness: number;
-  composure?: number;
-  arousal?: number;
-  valence?: number;
-  dominance?: number;
-}
-
-export interface VocalDelivery {
-  summary?: VocalDeliverySummary;
-  dimensions?: {
-    arousal?: number;
-    valence?: number;
-    dominance?: number;
-  };
-  timeline?: VocalDeliveryTimelinePoint[];
 }

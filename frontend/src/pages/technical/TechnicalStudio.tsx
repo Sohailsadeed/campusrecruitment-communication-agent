@@ -9,8 +9,6 @@ import {
   getTechnicalSession,
   QuestionItem,
 } from "../../api/technical";
-import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
-import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
 
 const ROLE_PRESETS = [
   { label: "Full Stack Engineer", icon: "layers", desc: "React, Node.js, distributed caches, and system design" },
@@ -70,6 +68,7 @@ export default function TechnicalStudio() {
   const [uploadingResume, setUploadingResume] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isCheckingResume, setIsCheckingResume] = useState(true);
+  const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Active Session State
@@ -96,7 +95,7 @@ export default function TechnicalStudio() {
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
+  const baseTextRef = useRef<string>("");
 
   // Check if candidate already has an indexed resume from a prior session
   useEffect(() => {
@@ -175,11 +174,12 @@ export default function TechnicalStudio() {
       recognition.lang = "en-US";
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let sessionTranscript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          sessionTranscript += event.results[i][0].transcript;
         }
-        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        const base = baseTextRef.current;
+        setAnswerText(base ? `${base} ${sessionTranscript.trimStart()}` : sessionTranscript);
       };
 
       recognition.onerror = () => setIsRecording(false);
@@ -198,6 +198,7 @@ export default function TechnicalStudio() {
       }
       setIsRecording(false);
     } else {
+      baseTextRef.current = answerText.trim();
       setRecordedAudioBlob(null);
       audioChunksRef.current = [];
 
@@ -248,9 +249,12 @@ export default function TechnicalStudio() {
     window.speechSynthesis.speak(utterance);
   };
 
-  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const uploadSelectedFile = async (file: File) => {
     if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setErrorMsg("Only PDF resume files are supported.");
+      return;
+    }
     setResumeFile(file);
     setUploadingResume(true);
     setErrorMsg(null);
@@ -263,6 +267,35 @@ export default function TechnicalStudio() {
       setErrorMsg(err?.response?.data?.detail || "Failed to upload and index resume in ChromaDB.");
     } finally {
       setUploadingResume(false);
+    }
+  };
+
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await uploadSelectedFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await uploadSelectedFile(file);
     }
   };
 
@@ -302,6 +335,7 @@ export default function TechnicalStudio() {
       setQuestionCount(0);
       setElapsedSeconds(0);
       setAnswerText("");
+      baseTextRef.current = "";
       localStorage.setItem("speakflow_active_technical_session", String(res.session_id));
       if (res.current_question?.text) {
         handleSpeakQuestion(res.current_question.text);
@@ -341,6 +375,7 @@ export default function TechnicalStudio() {
         setCurrentQuestion(res.next_question);
         setQuestionCount(res.question_count);
         setAnswerText("");
+        baseTextRef.current = "";
         setRecordedAudioBlob(null);
         if (res.next_question.text) {
           handleSpeakQuestion(res.next_question.text);
@@ -619,11 +654,12 @@ export default function TechnicalStudio() {
                 so the interviewer interrogates your actual past architectural choices.
               </p>
 
-              {/* Hidden file input controlled by ref */}
+              {/* Hidden file input controlled by ref and id */}
               <input
                 ref={fileInputRef}
+                id="technical-resume-upload"
                 type="file"
-                accept=".pdf"
+                accept=".pdf,application/pdf"
                 onChange={handleResumeUpload}
                 className="hidden"
                 disabled={uploadingResume}
@@ -697,17 +733,34 @@ export default function TechnicalStudio() {
                 </div>
               ) : (
                 /* Empty Upload Dropzone */
-                <label className="relative border-2 border-dashed border-outline-variant/40 hover:border-primary/60 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all bg-surface-container/50 hover:bg-surface-container">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`relative border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all select-none ${
+                    isDragOver
+                      ? "border-primary bg-primary/15 shadow-inner"
+                      : "border-outline-variant/40 hover:border-primary/60 bg-surface-container/50 hover:bg-surface-container"
+                  }`}
+                >
+                  <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2 pointer-events-none">
                     <span className="material-symbols-outlined text-[24px]">cloud_upload</span>
                   </div>
-                  <span className="text-xs font-semibold text-on-surface mb-0.5">
-                    Click to upload engineering resume (PDF)
+                  <span className="text-xs font-semibold text-on-surface mb-0.5 pointer-events-none">
+                    Click or drag & drop engineering resume (PDF)
                   </span>
-                  <span className="text-[10px] text-outline">
+                  <span className="text-[10px] text-outline pointer-events-none">
                     Supports standard PDF resumes (parsed into ChromaDB vector store)
                   </span>
-                </label>
+                </div>
               )}
             </div>
 
@@ -858,10 +911,6 @@ export default function TechnicalStudio() {
             </button>
           </div>
         </div>
-
-        {isRecording && (
-          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
-        )}
 
         <textarea
           rows={6}

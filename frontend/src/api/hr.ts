@@ -1,5 +1,4 @@
 import { apiClient } from "./client";
-import type { VocalDelivery } from "../types";
 
 export interface StarComponent {
   present: boolean;
@@ -49,7 +48,6 @@ export interface HRReportSummary {
   strengths: string[];
   weaknesses: string[];
   executive_summary: string;
-  vocal_delivery?: VocalDelivery;
 }
 
 export interface HRSessionResponse {

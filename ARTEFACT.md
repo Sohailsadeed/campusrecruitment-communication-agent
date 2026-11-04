@@ -1,7 +1,7 @@
 # SpeakFlow: Project Artefact, Evidence & Self-Audit Document
 
 > **Entry Point to System Evidence, Empirical Measurements, Prototype History, and Team Ownership.**  
-> *Complements the architectural design in [Approach.md](Approach.md).*
+> *Complements the architectural design in [APPROACH.md](APPROACH.md).*
 
 ---
 

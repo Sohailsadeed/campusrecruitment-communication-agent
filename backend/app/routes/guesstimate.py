@@ -1,7 +1,6 @@
 """Guesstimate & Market Sizing Round API endpoints."""
 import asyncio
 import logging
-from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -14,6 +13,8 @@ from app.models.guesstimate import GuesstimateCase
 from app.models.session import Session as SessionModel
 from app.models.user import User
 from app.routes.auth import get_current_user
+from app.services import upload_store
+from app.services.audio_ownership import audio_file_response, resolve_guesstimate_audio_path
 from app.services.guesstimate.evaluator import evaluate_guesstimate
 from app.services.guesstimate.question_bank import (
     get_metadata_summary,
@@ -22,6 +23,7 @@ from app.services.guesstimate.question_bank import (
 from app.services.emotion import analyze_speech_emotion, get_session_emotion_summary
 from app.services.laya import get_session_laya_metrics
 from app.services.transcription import transcribe_audio
+from app.services.session_ownership import owned_round_session
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -119,77 +121,92 @@ async def submit_guesstimate_answer(
     db: Session = Depends(get_db),
 ) -> dict:
     """Submit candidate's verbal or written solution for consulting evaluation."""
-    session = db.get(SessionModel, session_id)
-    if not session or session.round_type != "guesstimate":
-        raise HTTPException(status_code=404, detail="Guesstimate session not found.")
+    session = owned_round_session(db, session_id, current_user,
+                                  round_type="guesstimate")
 
     case = session.guesstimate_detail
     if not case:
         raise HTTPException(status_code=404, detail="Guesstimate case detail missing.")
 
-    # Save candidate spoken audio if uploaded
+    # Save candidate spoken audio if uploaded. The recording is optional: a failure here costs the
+    # spoken answer and the ASR it feeds, never the written answer the candidate also submitted.
+    tx = upload_store.transaction()
     audio_url = None
-    dest = None
+    clip = None
     if audio_file:
+        filename = f"session_{session.id}_guesstimate_{current_user.id}.webm"
+        staged = None
         try:
             audio_dir = settings.upload_dir / "guesstimate_audio"
             audio_dir.mkdir(parents=True, exist_ok=True)
-            filename = f"session_{session.id}_guesstimate_{current_user.id}.webm"
-            dest = audio_dir / filename
-            content = await audio_file.read()
-            with open(dest, "wb") as f:
-                f.write(content)
+            staged = tx.stage(audio_dir, filename)
+            await staged.write_from_upload(audio_file)
+            clip = staged.publish()
             audio_url = f"/api/guesstimate/audio/{filename}"
-            logger.info("Saved guesstimate spoken audio: %s", dest)
+            logger.info("Saved guesstimate spoken audio %s (session=%s)", filename, session.id)
         except Exception as exc:
-            logger.warning("Failed to save guesstimate audio: %s", exc)
+            # Identifiers and exception class only — see the same note in hr.py's answer handler.
+            logger.warning("Failed to save guesstimate audio %s (session=%s user=%s): %s",
+                           filename, session.id, current_user.id,
+                           upload_store.fault_label(exc))
+            if staged is not None:
+                tx.discard(staged)
+            audio_url = None
+            clip = None
 
     candidate_answer = answer
     vocal_delivery = {}
-    if dest and dest.exists():
+    if clip is not None:
         transcription_res, emotion_res = await asyncio.gather(
-            asyncio.to_thread(transcribe_audio, dest, "small", False),
-            asyncio.to_thread(analyze_speech_emotion, dest),
+            asyncio.to_thread(transcribe_audio, clip, "small", False),
+            asyncio.to_thread(analyze_speech_emotion, clip),
             return_exceptions=True,
         )
         if not isinstance(transcription_res, Exception) and transcription_res.get("text"):
             candidate_answer = str(transcription_res["text"]).strip()
         elif isinstance(transcription_res, Exception):
-            logger.warning("Guesstimate ASR failed for %s: %s", dest, transcription_res)
+            logger.warning("Guesstimate ASR failed for %s: %s", clip, transcription_res)
 
         if isinstance(emotion_res, Exception):
             logger.warning(
-                "Guesstimate emotion analysis failed for %s: %s", dest, emotion_res
+                "Guesstimate emotion analysis failed for %s: %s", clip, emotion_res
             )
         else:
             vocal_delivery = emotion_res or {}
 
-    # Evaluate via Nemotron LLM
-    eval_result = await evaluate_guesstimate(
-        question=case.question,
-        category=case.category,
-        difficulty=case.difficulty,
-        candidate_answer=candidate_answer.strip(),
-        approach_type=approach_type or case.approach_type or "top_down",
-    )
-    final_vocal_delivery = get_session_emotion_summary(
-        session.id, fallback=vocal_delivery
-    )
-    eval_result["vocal_delivery"] = final_vocal_delivery
-    eval_result["laya_metrics"] = get_session_laya_metrics(session.id)
+    try:
+        # Evaluate via Nemotron LLM
+        eval_result = await evaluate_guesstimate(
+            question=case.question,
+            category=case.category,
+            difficulty=case.difficulty,
+            candidate_answer=candidate_answer.strip(),
+            approach_type=approach_type or case.approach_type or "top_down",
+        )
+        final_vocal_delivery = get_session_emotion_summary(
+            session.id, fallback=vocal_delivery
+        )
+        eval_result["vocal_delivery"] = final_vocal_delivery
+        eval_result["laya_metrics"] = get_session_laya_metrics(session.id)
 
-    # Update GuesstimateCase record
-    case.candidate_answer = candidate_answer.strip()
-    case.approach_type = approach_type or case.approach_type or "top_down"
-    case.audio_url = audio_url or case.audio_url
-    case.evaluation = eval_result
+        # Update GuesstimateCase record
+        case.candidate_answer = candidate_answer.strip()
+        case.approach_type = approach_type or case.approach_type or "top_down"
+        case.audio_url = audio_url or case.audio_url
+        case.evaluation = eval_result
 
-    # Update SessionModel
-    session.status = "completed"
-    session.overall_score = float(eval_result.get("overall_score", 75))
-    session.report = eval_result
+        # Update SessionModel
+        session.status = "completed"
+        session.overall_score = float(eval_result.get("overall_score", 75))
+        session.report = eval_result
 
-    db.commit()
+        db.commit()
+    except BaseException:
+        # The row did not commit, so this clip describes nothing. A clip that already occupied this
+        # session's slot is restored rather than left overwritten by an unrecorded answer.
+        tx.rollback()
+        raise
+    tx.finalize()
 
     return {
         "session_id": session.id,
@@ -207,9 +224,8 @@ def get_guesstimate_session(
     db: Session = Depends(get_db),
 ) -> dict:
     """Fetch active or saved guesstimate interview session state."""
-    session = db.get(SessionModel, session_id)
-    if not session or session.round_type != "guesstimate":
-        raise HTTPException(status_code=404, detail="Guesstimate session not found.")
+    session = owned_round_session(db, session_id, current_user,
+                                  round_type="guesstimate")
 
     case = session.guesstimate_detail
     return {
@@ -234,9 +250,8 @@ def get_guesstimate_report(
     db: Session = Depends(get_db),
 ) -> dict:
     """Fetch finalized guesstimate assessment dossier."""
-    session = db.get(SessionModel, session_id)
-    if not session or session.round_type != "guesstimate":
-        raise HTTPException(status_code=404, detail="Guesstimate session not found.")
+    session = owned_round_session(db, session_id, current_user,
+                                  round_type="guesstimate")
 
     if not session.report:
         raise HTTPException(status_code=400, detail="Report has not been generated for this session yet.")
@@ -260,15 +275,7 @@ def get_guesstimate_report(
 def serve_guesstimate_audio(
     filename: str,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> FileResponse:
-    """Stream or serve candidate spoken guesstimate audio."""
-    safe_name = Path(filename).name
-    audio_path = settings.upload_dir / "guesstimate_audio" / safe_name
-    if not audio_path.exists():
-        raise HTTPException(status_code=404, detail="Audio recording file not found.")
-
-    return FileResponse(
-        path=str(audio_path),
-        media_type="audio/webm",
-        filename=safe_name,
-    )
+    """Serve the round's recording, only after proving this candidate owns the session."""
+    return audio_file_response(resolve_guesstimate_audio_path(db, current_user, filename))

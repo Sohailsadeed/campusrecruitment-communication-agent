@@ -4,11 +4,7 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from app.services.technical.evaluator import (
-    evaluate_answer,
-    generate_question,
-    generate_report,
-)
+from app.services.technical.evaluator import generate_question
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +21,11 @@ class InterviewState(TypedDict):
     current_question: Optional[Dict[str, Any]]
     answer: Optional[str]
     answer_sentences: Optional[List[Dict[str, Any]]]
+    audio_url: Optional[str]
+    audio_question_number: Optional[int]
+    vocal_delivery: Optional[Dict[str, Any]]
+    amend_index: Optional[int]
+    request: Optional[str]
     evaluation: Optional[Dict[str, Any]]
     question_count: int
     max_questions: int
@@ -59,48 +60,65 @@ async def generate_first_question_node(state: InterviewState) -> Dict[str, Any]:
     }
 
 
-async def evaluate_answer_node(state: InterviewState) -> Dict[str, Any]:
-    """Evaluate candidate's answer against the current question and resume context."""
-    logger.info("LangGraph Node: evaluate_answer for session %s", state.get("session_id"))
+async def record_answer_node(state: InterviewState) -> Dict[str, Any]:
+    """Acknowledge the submitted answer: store it and mark it for processing. Nothing is analysed here.
+
+    Three expensive passes sit between an answer and a report — transcription of the recording, the
+    vocal-delivery read of it, and the model's scoring of the round. All three are off this path now: the
+    entry lands with `processing: "pending"`, and the route's process pass fills in the transcript, the
+    word spans and the delivery from the clip named by `audio_question_number`. `evaluated: False` says the
+    scores are still missing rather than pretending they are merely absent.
+
+    `amend_index` comes from the route's slot resolution: one entry per question, so a re-submitted live
+    answer replaces its own record instead of doubling the count.
+    """
+    logger.info("LangGraph Node: record_answer for session %s", state.get("session_id"))
     curr_q = state.get("current_question") or {
         "id": f"q{state.get('question_count', 0) + 1}",
         "text": "Interview Question",
         "type": "behavioral",
     }
-    answer = state.get("answer") or ""
 
-    evaluation = await evaluate_answer(
-        question=curr_q,
-        answer=answer,
-        resume_context=state.get("resume_context", ""),
-        sentences=state.get("answer_sentences"),
-    )
-
-    completed_question = {
+    recorded_question = {
         **curr_q,
-        "answer": answer,
-        "score": evaluation.get("score", 7),
-        "feedback": evaluation.get("feedback", "Good response."),
-        "conciseness_score": evaluation.get("conciseness_score", 8),
-        "rambling_detected": evaluation.get("rambling_detected", False),
-        "rambling_critique": evaluation.get("rambling_critique", "Direct delivery."),
-        "jargon_vs_understanding": evaluation.get("jargon_vs_understanding", "applied_intuition"),
-        "applied_understanding_score": evaluation.get("applied_understanding_score", 8),
-        "jargon_critique": evaluation.get("jargon_critique", "Explained with applied intuition."),
-        "star_breakdown": evaluation.get("star_breakdown", {}),
-        "ideal_concise_script": evaluation.get("ideal_concise_script", ""),
-        "conclusion_checkpoint_index": evaluation.get("conclusion_checkpoint_index"),
-        "sentences": evaluation.get("sentences", []),
+        "answer": state.get("answer") or "",
+        "sentences": state.get("answer_sentences") or [],
+        "audio_url": state.get("audio_url"),
+        "audio_question_number": state.get("audio_question_number"),
+        "vocal_delivery": state.get("vocal_delivery") or {},
+        "processing": "pending",
+        "processing_error": None,
+        # An amend lands as a fresh take: any lease the previous analysis was holding is dropped, so that
+        # worker's late result can no longer overwrite this answer.
+        "processing_claimed_at": None,
+        "evaluated": False,
     }
 
     questions = list(state.get("questions", []))
-    questions.append(completed_question)
-    q_count = state.get("question_count", 0) + 1
+    amend_index = state.get("amend_index")
+    if amend_index is not None and 0 <= amend_index < len(questions):
+        previous = questions[amend_index]
+        # A re-submit that carries no recording keeps the clip already on the record, so correcting the
+        # text of an answer cannot orphan the recording that was made for it. The delivery figures stay
+        # with it because they describe that recording; a *new* clip brings neither, and the old ones
+        # would otherwise be read out against audio the candidate replaced.
+        if recorded_question["audio_url"] is None:
+            recorded_question["audio_url"] = previous.get("audio_url")
+            recorded_question["audio_question_number"] = previous.get("audio_question_number")
+            if previous.get("vocal_delivery"):
+                recorded_question["vocal_delivery"] = previous["vocal_delivery"]
+        questions[amend_index] = {**previous, **recorded_question}
+    else:
+        questions.append(recorded_question)
 
     return {
         "questions": questions,
-        "evaluation": evaluation,
-        "question_count": q_count,
+        "evaluation": None,
+        "question_count": len(questions),
+        # Asking the next question is not this request's job any more: the process pass generates it, so
+        # an answer is acknowledged as soon as it is stored.
+        "current_question": None,
+        "is_complete": len(questions) >= state.get("max_questions", 5),
     }
 
 
@@ -123,41 +141,53 @@ async def generate_next_question_node(state: InterviewState) -> Dict[str, Any]:
     return {
         "current_question": next_q,
         "answer": None,
+        "answer_sentences": None,
+        "audio_url": None,
+        "vocal_delivery": None,
+        "amend_index": None,
         "evaluation": None,
         "is_complete": False,
     }
 
 
-async def generate_report_node(state: InterviewState) -> Dict[str, Any]:
-    """Compile final interview performance report and score when round is complete."""
-    logger.info("LangGraph Node: generate_report for session %s", state.get("session_id"))
-    questions = state.get("questions", [])
-    report = await generate_report(
-        questions_asked=questions,
-        role=state["role"],
-    )
+async def finish_round_node(state: InterviewState) -> Dict[str, Any]:
+    """Close the submit request: the answer is stored, no question is open, nothing is scored yet.
+
+    `is_complete` is the comparison `record_answer_node` already made between the answer count and
+    `max_questions`, so a mid-round submit ends with the round open and its next question left for the
+    process pass to generate. Only the last answer of the round closes it.
+
+    The report is deliberately not produced here. A round that has run out of questions has not yet been
+    transcribed or evaluated, and `report: None` says exactly that — the route's process and evaluation
+    passes turn it into a completed session, or leave it open when the model cannot deliver a report.
+    """
+    logger.info("LangGraph Node: finish_round for session %s", state.get("session_id"))
     return {
-        "report": report,
-        "is_complete": True,
         "current_question": None,
+        "answer": None,
+        "evaluation": None,
+        "report": None,
+        "is_complete": bool(state.get("is_complete")),
     }
 
 
 # ---------------------------------------------------------------------------
 # Routing Logic
 # ---------------------------------------------------------------------------
-def route_after_evaluation(state: InterviewState) -> Literal["generate_next_question", "generate_report"]:
-    """Determine whether to ask next question or compile final report."""
-    q_count = state.get("question_count", 0)
-    max_q = state.get("max_questions", 5)
-    if q_count >= max_q:
-        return "generate_report"
-    return "generate_next_question"
-
-
 def route_entrypoint(state: InterviewState) -> str:
+    """Where to enter: open the round, acknowledge an answer, or ask the next question.
+
+    `request` names which of those the caller needs. Only `next_question` is a model call that is *not*
+    the answer's own: it is what the process pass asks for after the answer is already stored, so the
+    candidate's submit is never held up by question generation.
+    """
+    request = state.get("request")
+    if request == "record_answer":
+        return "record_answer"
+    if request == "next_question":
+        return "generate_next_question"
     if state.get("answer"):
-        return "evaluate_answer"
+        return "record_answer"
     return "generate_first_question"
 
 
@@ -168,31 +198,24 @@ def _build_interview_graph():
     builder = StateGraph(InterviewState)
 
     builder.add_node("generate_first_question", generate_first_question_node)
-    builder.add_node("evaluate_answer", evaluate_answer_node)
+    builder.add_node("record_answer", record_answer_node)
     builder.add_node("generate_next_question", generate_next_question_node)
-    builder.add_node("generate_report", generate_report_node)
+    builder.add_node("finish_round", finish_round_node)
 
     builder.add_conditional_edges(
         START,
         route_entrypoint,
         {
             "generate_first_question": "generate_first_question",
-            "evaluate_answer": "evaluate_answer",
-        },
-    )
-
-    builder.add_conditional_edges(
-        "evaluate_answer",
-        route_after_evaluation,
-        {
+            "record_answer": "record_answer",
             "generate_next_question": "generate_next_question",
-            "generate_report": "generate_report",
         },
     )
 
+    builder.add_edge("record_answer", "finish_round")
     builder.add_edge("generate_first_question", END)
     builder.add_edge("generate_next_question", END)
-    builder.add_edge("generate_report", END)
+    builder.add_edge("finish_round", END)
 
     return builder.compile()
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getGuesstimateReport, GuesstimateSessionResponse } from "../../api/guesstimate";
 import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
+import { ProtectedAudioPlayer } from "../../components/Recording/ProtectedAudioPlayer";
 
 export default function GuesstimateReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -505,7 +506,7 @@ export default function GuesstimateReport() {
         {/* Audio Player */}
         {data.audio_url && (
           <div className="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 flex items-center gap-4 print:hidden">
-            <audio controls src={data.audio_url} className="w-full h-9 rounded-lg" />
+            <ProtectedAudioPlayer audioUrl={data.audio_url} className="w-full h-9 rounded-lg" />
           </div>
         )}
 

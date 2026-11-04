@@ -31,16 +31,31 @@ bcrypt==4.0.1
 # Note: numpy is constrained to <2.0.0 to guarantee MediaPipe and OpenCV compatibility
 numpy>=1.26.2,<2.0.0
 openai-whisper==20231117
+# The primary ASR engine app/services/transcription.py actually loads. PyAV is its decoder, and
+# the pairing below is load-bearing: faster-whisper calls av.open(..., metadata_errors="ignore"),
+# a keyword PyAV 19 dropped, so av>=19 makes every real transcription raise TypeError and return an
+# empty result. Pin the ceiling until faster-whisper ships for PyAV 19.
+faster-whisper>=1.2.1,<2.0.0
 mediapipe==0.10.13
 opencv-python-headless==4.8.1.78
 ffmpeg-python==0.2.0
 edge-tts>=6.1.12
-av>=12.0.0
+# The coach's primary voice (app/services/tts.py): Kokoro-82M through its reference runtime, speaking
+# locally. `kokoro` leaves numpy unpinned, so the <2.0.0 ceiling the note above depends on survives —
+# kokoro-onnx was rejected because every release of it requires numpy>=2.0.2. Its English G2P,
+# espeakng-loader and phonemizer-fork arrive with it via misaki[en]; the weights do not. Installing
+# this package fetches no model: see docs/tts-kokoro.md for where the files come from.
+kokoro>=0.9.4
+av>=14.0.0,<19.0.0
+praat-parselmouth>=0.4.3
 
 # AI, RAG & Memory (Technical Round)
 openai>=1.10.0
 langchain>=0.1.0
 langchain-community>=0.0.20
+# The Ollama integration left langchain-community at 0.4; the HR evaluator's local fallback needs
+# this package to reach a model at all (see app/services/hr/evaluator.py::_get_llm).
+langchain-ollama>=1.0.0
 langchain-openai>=0.0.5
 langgraph>=0.0.20
 chromadb>=0.4.22
@@ -49,3 +64,14 @@ langchain-huggingface>=0.1.0
 sentence-transformers>=2.2.0
 mem0ai>=0.0.1
 pypdf>=4.0.0
+
+# LiveKit — self-hosted WebRTC SFU (V1: room access tokens for the HR round)
+# Server SDK: it is the only thing that signs a token, and the API secret never
+# leaves the backend. It brings PyJWT and livekit-protocol with it.
+livekit-api>=1.2.2
+
+# LiveKit voice agent (V1: the HR round's spoken turn). livekit-agents carries the RTC
+# bindings the agent publishes and subscribes audio with; PyAV, already pinned in the ML block
+# above with the <19 ceiling faster-whisper needs, decodes the coach TTS file into the PCM frames
+# that binding expects.
+livekit-agents>=1.0.0

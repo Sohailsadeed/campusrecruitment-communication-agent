@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { getTechnicalReport, TechnicalReportResponse } from "../../api/technical";
 import SentenceAnalysis from "../../components/Technical/SentenceAnalysis";
 import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
+import { ProtectedAudioPlayer } from "../../components/Recording/ProtectedAudioPlayer";
 
 export default function TechnicalReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -490,9 +491,8 @@ export default function TechnicalReport() {
                         {/* Inline Audio Player */}
                         {q.audio_url && (
                           <div className="p-2.5 rounded-lg bg-surface-container border border-secondary/20 flex items-center gap-3">
-                            <audio
-                              controls
-                              src={q.audio_url}
+                            <ProtectedAudioPlayer
+                              audioUrl={q.audio_url}
                               className="w-full h-8 max-w-md accent-secondary"
                             />
                             <span className="text-[11px] text-on-surface-variant font-medium hidden sm:inline">

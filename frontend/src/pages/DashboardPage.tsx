@@ -18,6 +18,25 @@ import {
   usePlacementReadiness,
 } from "../hooks/useSessions";
 
+type DashboardQuery = {
+  isError: boolean;
+  error: unknown;
+  refetch: () => Promise<unknown>;
+};
+
+/**
+ * AUTH-C/D-F: these endpoints answer 401 for an expired token and 404 once a row belongs to someone
+ * else, and a failed request used to render as "no practice yet". The copy keeps the four cases
+ * distinguishable so an outage is never mistaken for an empty history.
+ */
+function describeDashboardFailure(error: unknown): string {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  if (status === 401) return "Your session has expired. Sign in again to see your own progress.";
+  if (status === 403 || status === 404) return "These results are not available for this account.";
+  if (typeof status === "number") return `The progress service rejected the request (HTTP ${status}).`;
+  return "Your progress could not be fetched. Check your connection and try again.";
+}
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"all" | "jam" | "technical" | "guesstimate" | "hr">("all");
   const summaryQuery = useProgressSummary();
@@ -31,6 +50,16 @@ export default function DashboardPage() {
   if (summaryQuery.isLoading || sessionsQuery.isLoading || metricsQuery.isLoading) {
     return <Loading label="Loading placement intelligence dashboard" />;
   }
+
+  const failedSections: { label: string; query: DashboardQuery }[] = [
+    { label: "Practice summary", query: summaryQuery },
+    { label: "Placement readiness matrix", query: readinessQuery },
+    { label: "JAM fluency trajectory", query: metricsQuery },
+    { label: "Technical trajectory", query: techQuery },
+    { label: "Guesstimate trajectory", query: guesstimateQuery },
+    { label: "HR trajectory", query: hrQuery },
+    { label: "Session history", query: sessionsQuery },
+  ].filter((section) => section.query.isError);
 
   const summary = summaryQuery.data;
   const metrics = metricsQuery.data || [];
@@ -104,10 +133,47 @@ export default function DashboardPage() {
       </div>
 
       {/* LAYER 1: 4-Round Placement Readiness Matrix */}
-      <PlacementReadinessMatrix
-        data={readinessData}
-        isLoading={readinessQuery.isLoading}
-      />
+      {failedSections.length > 0 && (
+        <div
+          role="alert"
+          className="flex flex-col gap-2 rounded-lg border border-error/40 bg-error/5 p-4 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px] text-error">cloud_off</span>
+            <span className="text-sm font-semibold text-on-surface">
+              Some of your progress could not be loaded
+            </span>
+          </div>
+          <ul className="ml-5 list-disc space-y-1 text-[11px] text-on-surface-variant">
+            {failedSections.map((section) => (
+              <li key={section.label}>
+                <span className="font-semibold text-on-surface">{section.label}:</span>{" "}
+                {describeDashboardFailure(section.query.error)}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-on-surface-variant">
+            The sections below show only what was actually retrieved — an empty chart here means the
+            request failed, not that you have no recordings.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              for (const section of failedSections) void section.query.refetch();
+            }}
+            className="w-fit rounded border border-outline-variant/40 px-2.5 py-1 text-[10px] font-semibold text-on-surface hover:bg-surface-container-high"
+          >
+            Retry these requests
+          </button>
+        </div>
+      )}
+
+      {!readinessQuery.isError && (
+        <PlacementReadinessMatrix
+          data={readinessData}
+          isLoading={readinessQuery.isLoading}
+        />
+      )}
 
       {/* Autonomous Curriculum Coach Agent */}
       <CurriculumCoachCard />
@@ -195,7 +261,7 @@ export default function DashboardPage() {
                 </span>
               </div>
             )}
-            <ProgressDashboard metrics={metrics} />
+            {!metricsQuery.isError && <ProgressDashboard metrics={metrics} />}
           </div>
         )}
 
@@ -209,10 +275,12 @@ export default function DashboardPage() {
                 </span>
               </div>
             )}
-            <TechnicalProgressDashboard
-              data={techData}
-              isLoading={techQuery.isLoading}
-            />
+            {!techQuery.isError && (
+              <TechnicalProgressDashboard
+                data={techData}
+                isLoading={techQuery.isLoading}
+              />
+            )}
           </div>
         )}
 
@@ -226,10 +294,12 @@ export default function DashboardPage() {
                 </span>
               </div>
             )}
-            <GuesstimateProgressDashboard
-              data={guesstimateData}
-              isLoading={guesstimateQuery.isLoading}
-            />
+            {!guesstimateQuery.isError && (
+              <GuesstimateProgressDashboard
+                data={guesstimateData}
+                isLoading={guesstimateQuery.isLoading}
+              />
+            )}
           </div>
         )}
 
@@ -243,16 +313,18 @@ export default function DashboardPage() {
                 </span>
               </div>
             )}
-            <HRProgressDashboard
-              data={hrData}
-              isLoading={hrQuery.isLoading}
-            />
+            {!hrQuery.isError && (
+              <HRProgressDashboard
+                data={hrData}
+                isLoading={hrQuery.isLoading}
+              />
+            )}
           </div>
         )}
       </div>
 
       {/* LAYER 3: Drill-Down Diagnostic Sessions History */}
-      <SessionHistory sessions={filteredSessions} />
+      {!sessionsQuery.isError && <SessionHistory sessions={filteredSessions} />}
     </div>
   );
 }

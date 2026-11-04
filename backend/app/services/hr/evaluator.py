@@ -1,48 +1,36 @@
-"""HR & Behavioral interview evaluator using OpenRouter Nemotron with local Ollama fallback."""
+"""HR & Behavioral interview evaluator; the LLM provider is chosen by configuration, local by default."""
 import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from config import settings
+from app.services import llm_client
 
 logger = logging.getLogger(__name__)
 
 _llm = None
-_cached_key = None
+_cached_signature = None
+
+# The HR round reads answers in one shape, so one temperature and one answer budget serve every
+# question in it.
+CLIENT_TEMPERATURE = 0.6
+CLIENT_MAX_TOKENS = 2500
 
 
 def _get_llm():
-    """Get LLM instance: Nemotron via OpenRouter, falling back to local Ollama."""
-    global _llm, _cached_key
-    import os
-    from dotenv import dotenv_values
+    """Return this round's chat client, built from the shared provider decision.
 
-    env_vals = dotenv_values(str(settings.upload_dir.parent / ".env"))
-    current_key = env_vals.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
-
-    if _llm is None or _cached_key != current_key:
-        _cached_key = current_key
-        if current_key and current_key.startswith("sk-"):
-            logger.info("HR Evaluator using OpenRouter LLM: %s", settings.chat_model)
-            _llm = ChatOpenAI(
-                model=settings.chat_model,
-                api_key=current_key,
-                base_url=settings.openrouter_base_url,
-                max_tokens=2500,
-                temperature=0.6,
-            )
-        else:
-            logger.info("HR Evaluator using local Ollama fallback: %s at %s", settings.ollama_model, settings.ollama_base_url)
-            from langchain_community.chat_models import ChatOllama
-            _llm = ChatOllama(
-                base_url=settings.ollama_base_url,
-                model=settings.ollama_model,
-                temperature=0.6,
-            )
+    The selection rule lives in `app.services.llm_client`: configuration picks the provider, a
+    credential never does, and an unavailable local model is an error rather than a remote request.
+    """
+    global _llm, _cached_signature
+    signature = llm_client.cache_signature()
+    if _llm is None or _cached_signature != signature:
+        _cached_signature = signature
+        _llm = llm_client.build_chat_client("HR Evaluator", temperature=CLIENT_TEMPERATURE,
+                                            max_tokens=CLIENT_MAX_TOKENS)
     return _llm
 
 
@@ -106,6 +94,16 @@ class HRAnswerEvaluationSchema(BaseModel):
         default="",
         description="An exemplary 45-60 second verbal delivery script showing how a top-tier candidate would articulate this answer",
     )
+    # Declared, not appended: these two travel with every score so a stored evaluation can say
+    # whether a model read the answer. They are set by the code, never trusted from the model.
+    evaluator_basis: str = Field(
+        default="fallback",
+        description="Set by the service, not by the model: 'model', 'fallback' or 'heuristic'",
+    )
+    evaluator_error: Optional[str] = Field(
+        default=None,
+        description="Why the score is not a model reading of the answer, when it is not",
+    )
 
 
 class HRReportSchema(BaseModel):
@@ -116,6 +114,18 @@ class HRReportSchema(BaseModel):
     strengths: List[str] = Field(default_factory=list, description="Top behavioral and communication strengths demonstrated")
     weaknesses: List[str] = Field(default_factory=list, description="High-priority coaching areas for placement day")
     executive_summary: str = Field(default="", description="Executive assessment of candidate's behavioral poise, cultural maturity, and hire readiness")
+    report_basis: str = Field(
+        default="empirical",
+        description="Set by the service: 'model' when a model wrote the prose, 'empirical' when only the arithmetic did",
+    )
+    report_error: Optional[str] = Field(
+        default=None,
+        description="Why the narrative is the standard wording rather than a synthesis of this candidate's round",
+    )
+    answers_not_model_scored: int = Field(
+        default=0,
+        description="How many of this round's answers were never read by a model",
+    )
 
 
 # ---------------------------------------------------------
@@ -211,6 +221,10 @@ async def evaluate_hr_answer(
             "I took personal ownership by auditing the workflow, facilitating daily alignment syncs, and re-architecting the critical path. "
             "As a result, we reduced cycle time by 25% and delivered ahead of the deadline."
         ),
+        # Every score has to say whether a model read the answer. Without this, the fixed 74 below is
+        # indistinguishable from a mediocre real evaluation once it is stored in the session record.
+        "evaluator_basis": "fallback",
+        "evaluator_error": None,
     }
 
     if not candidate_answer or len(candidate_answer.strip()) < 15:
@@ -218,6 +232,8 @@ async def evaluate_hr_answer(
         default_fallback["personal_ownership_score"] = 40
         default_fallback["specificity_score"] = 40
         default_fallback["coaching_feedback"] = "Answer was too brief to evaluate behavioral STAR structure or personal ownership."
+        default_fallback["evaluator_basis"] = "heuristic"
+        default_fallback["evaluator_error"] = "answer too brief to send for model evaluation"
         return default_fallback
 
     try:
@@ -233,13 +249,23 @@ async def evaluate_hr_answer(
             }
         )
 
-        overall = int(result.get("overall_score", 75))
+        # A small local model sometimes returns the JSON *schema* from the format instructions instead
+        # of an instance of it. That parses cleanly and carries no scores, so it must not be silently
+        # defaulted to 75/80 and reported as the candidate's evaluation.
+        if not isinstance(result, dict) or result.get("overall_score") is None:
+            raise ValueError(
+                f"model produced no overall_score (got {type(result).__name__} with keys "
+                f"{sorted(result)[:5] if isinstance(result, dict) else repr(result)[:80]})"
+            )
+
+        overall = int(result.get("overall_score"))
         ownership = int(result.get("personal_ownership_score", 75))
         specificity = int(result.get("specificity_score", 75))
         relevance = int(result.get("relevance_score", 80))
 
-        star = result.get("star_structure") or default_fallback["star_structure"]
-        if not isinstance(star, dict):
+        star = result.get("star_structure")
+        star_was_default = not isinstance(star, dict) or not star
+        if star_was_default:
             star = default_fallback["star_structure"]
 
         return {
@@ -253,9 +279,15 @@ async def evaluate_hr_answer(
             "relevance_critique": str(result.get("relevance_critique") or default_fallback["relevance_critique"]),
             "coaching_feedback": str(result.get("coaching_feedback") or default_fallback["coaching_feedback"]),
             "ideal_star_script": str(result.get("ideal_star_script") or default_fallback["ideal_star_script"]),
+            "evaluator_basis": "model",
+            "evaluator_error": (
+                "model gave no star_structure; the STAR breakdown shown is the placeholder, not a reading of the answer"
+                if star_was_default else None
+            ),
         }
     except Exception as exc:
-        logger.warning("HR answer evaluation error: %s. Using structured fallback.", exc)
+        logger.warning("HR answer evaluation error: %s. Using structured fallback.", exc, exc_info=True)
+        default_fallback["evaluator_error"] = f"{type(exc).__name__}: {exc}"[:300]
         return default_fallback
 
 
@@ -282,10 +314,19 @@ async def generate_hr_report(
             "Candidate demonstrated strong cultural maturity and structured communication. "
             "With slightly sharper quantitative impact framing, they will stand out in Tier-1 behavioral rounds."
         ),
+        # The averages below are arithmetic, but the strengths/weaknesses/summary prose is not: say
+        # which of the two the reader is looking at, and how many per-answer scores were placeholders.
+        "report_basis": "heuristic",
+        "report_error": None,
+        "answers_not_model_scored": 0,
     }
 
     if not questions_asked:
         return default_fallback
+
+    not_model_scored = sum(
+        1 for q in questions_asked if (q.get("evaluation") or {}).get("evaluator_basis") not in (None, "model")
+    )
 
     # Pre-compute empirical averages
     ownership_scores = [q.get("evaluation", {}).get("personal_ownership_score", 75) for q in questions_asked]
@@ -329,11 +370,17 @@ async def generate_hr_report(
             "strengths": strengths if isinstance(strengths, list) else default_fallback["strengths"],
             "weaknesses": weaknesses if isinstance(weaknesses, list) else default_fallback["weaknesses"],
             "executive_summary": str(summary),
+            "report_basis": "model" if summary is not default_fallback["executive_summary"] else "empirical",
+            "report_error": None,
+            "answers_not_model_scored": not_model_scored,
         }
     except Exception as exc:
-        logger.warning("HR report generation error: %s. Using empirical fallback.", exc)
+        logger.warning("HR report generation error: %s. Using empirical fallback.", exc, exc_info=True)
         default_fallback["total_score"] = avg_total
         default_fallback["avg_ownership_score"] = avg_own
         default_fallback["avg_star_completeness"] = avg_star
         default_fallback["avg_specificity_score"] = avg_spec
+        default_fallback["report_basis"] = "empirical"
+        default_fallback["report_error"] = f"{type(exc).__name__}: {exc}"[:300]
+        default_fallback["answers_not_model_scored"] = not_model_scored
         return default_fallback

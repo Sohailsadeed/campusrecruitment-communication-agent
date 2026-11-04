@@ -8,7 +8,9 @@ import RecordingControls from "./RecordingControls";
 import TopicSpinner from "./TopicSpinner";
 import { useMediaRecorder } from "../../hooks/useMediaRecorder";
 import { useFaceTracking } from "../../hooks/useFaceTracking";
+import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
 import { useAnalyzeSession, useUploadSession } from "../../hooks/useSessions";
+import LiveConfidenceNeedle from "../Interview/LiveConfidenceNeedle";
 
 export default function RecordingSession() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -17,6 +19,13 @@ export default function RecordingSession() {
   const recorder = useMediaRecorder();
   const uploadMutation = useUploadSession();
   const analyzeMutation = useAnalyzeSession();
+  const isRecording = recorder.status === "recording";
+  const { liveEmotion } = useLiveEmotionStream(
+    0,
+    isRecording,
+    undefined,
+    recorder.stream
+  );
 
   const paramTopic = searchParams.get("topic");
   const paramTrack = searchParams.get("track") || "jam";
@@ -96,6 +105,10 @@ export default function RecordingSession() {
               centered={faceState.centered}
             />
           ) : null}
+        </div>
+
+        <div className="mt-4">
+          <LiveConfidenceNeedle emotion={liveEmotion} isRecording={isRecording} />
         </div>
 
         <div className="mt-5">

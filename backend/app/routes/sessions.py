@@ -12,26 +12,30 @@ from fastapi import (
     Depends,
     File,
     Form,
-    Header,
     HTTPException,
     Request,
     UploadFile,
-    Response,  # Add this
+    Response,
     status,
 )
 from fastapi.responses import FileResponse
-from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database.engine import get_db
 from app.models.session import Session as SessionModel
 from app.models.user import User
+from app.routes.auth import get_current_user
 from app.schemas.session import (
     SessionCreate,
     SessionDetailOut,
     SessionOut,
     SessionUpdate,
+)
+from app.services import upload_store
+from app.services.session_ownership import (
+    owned_session,
+    owned_session_scope,
 )
 from app.services.session_media import (
     get_session_audio_media_type,
@@ -64,27 +68,15 @@ _ALLOWED_AUDIO_TYPES = {
 _ALLOWED_EXTENSIONS = {".webm", ".mp4", ".ogg", ".mov", ".mp3", ".wav", ".m4a"}
 
 
-def _get_optional_user(
-    authorization: Optional[str] = Header(default=None),
-    db: Session = Depends(get_db),
-) -> Optional[User]:
-    """Extract and validate JWT from Authorization header if present, return the User or None."""
-    if not authorization or not authorization.lower().startswith("bearer "):
-        return None
-    token = authorization.split(" ", 1)[1]
-    try:
-        from jose import jwt
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        subject: Optional[str] = payload.get("sub")
-    except JWTError:
-        return None
-    if not subject:
-        return None
-    return db.scalar(select(User).where(User.email == subject))
+def _save_upload(tx: upload_store.UploadTransaction, file: UploadFile, subdir: str) -> str:
+    """Validate with the existing rules, then stream this file into the request's transaction.
 
-
-def _save_upload(file: UploadFile, subdir: str) -> str:
-    """Validate and save an uploaded file. Returns the stored path."""
+    Nothing about the contract changes: the same MIME and extension checks produce the same 400
+    bodies, the same uuid name is the final name, the same 200 MB budget produces the same 413.
+    What changes is where the bytes go while they arrive — a private temp file in the destination
+    directory, closed before it is moved into place, so a failing write never leaves a partial
+    file at a path anything could read.
+    """
     # Validate MIME type
     allowed = _ALLOWED_VIDEO_TYPES | _ALLOWED_AUDIO_TYPES
     content_type = (file.content_type or "").split(";")[0].strip()
@@ -103,22 +95,19 @@ def _save_upload(file: UploadFile, subdir: str) -> str:
     target_dir = settings.upload_dir / subdir
     target_dir.mkdir(parents=True, exist_ok=True)
     unique = f"{uuid.uuid4().hex}{suffix}"
-    dest = target_dir / unique
 
-    # Enforce max upload size
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
-    written = 0
-    with dest.open("wb") as out:
-        while chunk := file.file.read(1024 * 256):  # 256 KB chunks
-            written += len(chunk)
-            if written > max_bytes:
-                dest.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=413,
-                    detail=f"File exceeds maximum allowed size of {settings.max_upload_size_mb} MB",
-                )
-            out.write(chunk)
-    return str(dest)
+    staged = tx.stage(target_dir, unique)
+    try:
+        staged.write_from(file.file, max_bytes=max_bytes)
+    except upload_store.UploadTooLarge:
+        # The temp keeps its open descriptor until the request unwinds and aborts it, which is the
+        # only order that can delete the file on Windows.
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds maximum allowed size of {settings.max_upload_size_mb} MB",
+        ) from None
+    return str(staged.publish())
 
 
 @router.get("", response_model=List[SessionOut])
@@ -127,15 +116,12 @@ def list_sessions(
     offset: int = 0,
     round_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> List[SessionOut]:
-    stmt = select(SessionModel).order_by(SessionModel.created_at.desc())
+    stmt = select(SessionModel).where(owned_session_scope(current_user))
+    stmt = stmt.order_by(SessionModel.created_at.desc())
     if round_type:
         stmt = stmt.where(SessionModel.round_type == round_type)
-    if current_user is not None:
-        stmt = stmt.where(SessionModel.user_id == current_user.id)
-    else:
-        stmt = stmt.where((SessionModel.user_id == 1) | (SessionModel.user_id.is_(None)))
     stmt = stmt.offset(offset).limit(limit)
     rows = db.scalars(stmt).all()
     return [SessionOut.model_validate(r) for r in rows]
@@ -151,37 +137,45 @@ async def create_session(
     video: Optional[UploadFile] = File(None),
     audio: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionOut:
     video_path: Optional[str] = None
     audio_path: Optional[str] = None
-    if video is not None:
-        video_path = _save_upload(video, "video")
-    if audio is not None:
-        audio_path = _save_upload(audio, "audio")
+    tx = upload_store.transaction()
+    try:
+        if video is not None:
+            video_path = _save_upload(tx, video, "video")
+        if audio is not None:
+            audio_path = _save_upload(tx, audio, "audio")
 
-    meta_dict = {}
-    if round_metadata:
-        try:
-            import json
-            meta_dict = json.loads(round_metadata) if isinstance(round_metadata, str) else dict(round_metadata)
-        except Exception:
-            meta_dict = {}
+        meta_dict = {}
+        if round_metadata:
+            try:
+                import json
+                meta_dict = json.loads(round_metadata) if isinstance(round_metadata, str) else dict(round_metadata)
+            except Exception:
+                meta_dict = {}
 
-    new_session = SessionModel(
-        user_id=current_user.id if current_user else None,
-        title=title,
-        description=description,
-        duration_seconds=duration_seconds,
-        video_path=video_path,
-        audio_path=audio_path,
-        round_type=round_type,
-        round_metadata=meta_dict,
-        status="pending",
-    )
-    db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
+        new_session = SessionModel(
+            user_id=current_user.id,
+            title=title,
+            description=description,
+            duration_seconds=duration_seconds,
+            video_path=video_path,
+            audio_path=audio_path,
+            round_type=round_type,
+            round_metadata=meta_dict,
+            status="pending",
+        )
+        db.add(new_session)
+        db.commit()
+        db.refresh(new_session)
+    except BaseException:
+        # This request as a whole failed, so nothing it published stays behind — including the file
+        # the first upload completed when the second upload or the commit is what broke.
+        tx.rollback()
+        raise
+    tx.finalize()
     return SessionOut.model_validate(new_session)
 
 
@@ -189,10 +183,10 @@ async def create_session(
 def create_session_json(
     payload: SessionCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionOut:
     new_session = SessionModel(
-        user_id=current_user.id if current_user else None,
+        user_id=current_user.id,
         title=payload.title,
         description=payload.description,
         duration_seconds=payload.duration_seconds,
@@ -208,24 +202,14 @@ def create_session_json(
     return SessionOut.model_validate(new_session)
 
 
-def _get_session_for_user(session_id: int, user: Optional[User], db: Session) -> SessionModel:
-    """Fetch a session, ensuring it belongs to the current user if logged in."""
-    session = db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if user is not None and session.user_id is not None and session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
-    return session
-
-
 @router.get("/{session_id}", response_model=SessionDetailOut)
 def get_session(
     session_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionDetailOut:
-    session = _get_session_for_user(session_id, current_user, db)
+    session = owned_session(db, session_id, current_user)
     detail = SessionDetailOut.model_validate(session)
     detail.audio_url = get_session_audio_url(session, request)
     return detail
@@ -235,10 +219,10 @@ def get_session(
 def get_session_audio(
     session_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> FileResponse:
     """Stream the candidate's original JAM recording when it still exists."""
-    session = _get_session_for_user(session_id, current_user, db)
+    session = owned_session(db, session_id, current_user)
     audio_path = get_session_audio_path(session)
     if audio_path is None:
         raise HTTPException(status_code=404, detail="Original recording unavailable")
@@ -257,9 +241,9 @@ def update_session(
     session_id: int,
     payload: SessionUpdate,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> SessionOut:
-    session = _get_session_for_user(session_id, current_user, db)
+    session = owned_session(db, session_id, current_user)
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(session, field, value)
     db.commit()
@@ -276,9 +260,9 @@ def update_session(
 def delete_session(
     session_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
-    session = _get_session_for_user(session_id, current_user, db)
+    session = owned_session(db, session_id, current_user)
     db.delete(session)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

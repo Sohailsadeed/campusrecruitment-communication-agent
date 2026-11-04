@@ -108,29 +108,40 @@ def get_optional_current_user(
     return None
 
 
+_UNAUTHENTICATED_DETAIL = "Could not validate credentials"
+_WWW_AUTHENTICATE = {"WWW-Authenticate": "Bearer"}
+
+
+def _unauthenticated() -> HTTPException:
+    """Fresh 401 per failure; a shared exception instance would carry another request's traceback."""
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=_UNAUTHENTICATED_DETAIL,
+        headers=dict(_WWW_AUTHENTICATE),
+    )
+
+
 def get_current_user(
     authorization: Optional[str] = Header(default=None),
     db: Session = Depends(get_db),
 ) -> User:
-    """Extract and validate JWT, or fallback to default local user for local studio drills."""
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization.split(" ", 1)[1]
-        subject = decode_token(token)
-        if subject:
-            user = db.scalar(select(User).where(User.email == subject))
-            if user:
-                return user
+    """Fail-closed bearer identity: returns a User or raises 401. Never creates or falls back to a user.
 
-    # Fallback for dev / unauthenticated local use
-    user = db.scalar(select(User).order_by(User.id.asc()))
-    if not user:
-        user = User(
-            email="developer@verbaliq.local",
-            username="candidate",
-            full_name="Alex Rivera",
-            hashed_password=hash_password("verbaliq123"),
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    Only credential problems become 401. Database or JWT-library faults propagate untouched as 500.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise _unauthenticated()
+
+    token = authorization.split(" ", 1)[1].strip()
+    if not token:
+        raise _unauthenticated()
+
+    subject = decode_token(token)
+    if not subject:
+        raise _unauthenticated()
+
+    user = db.scalar(select(User).where(User.email == subject))
+    if user is None:
+        raise _unauthenticated()
+
     return user

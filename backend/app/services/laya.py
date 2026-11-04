@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+from app.services.audio_pcm import decode_pcm16_chunk
+
 logger = logging.getLogger(__name__)
 
 SILENCE_RMS_THRESHOLD = 0.015
@@ -46,6 +48,10 @@ _LAYAS: Dict[int, LayaSessionState] = {}
 
 
 def _decode_samples(audio_bytes: bytes) -> Optional[np.ndarray]:
+    pcm = decode_pcm16_chunk(audio_bytes)
+    if pcm is not None:
+        return pcm
+
     try:
         import av
 

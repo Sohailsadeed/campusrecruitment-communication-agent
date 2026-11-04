@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import {
   getHRTracks,
@@ -9,6 +9,7 @@ import {
   HRTrackInfo,
 } from "../../api/hr";
 import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
+import { LiveTranscriptAggregator } from "../../lib/liveTranscript";
 import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
 
 const ROLE_PRESETS = [
@@ -56,6 +57,12 @@ export default function HRStudio() {
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const liveTranscript = useMemo(() => new LiveTranscriptAggregator(), []);
+  const [liveCaption, setLiveCaption] = useState("");
+  // Open from recognition.start() until the engine ends the session: stop() flushes the last final
+  // result before onend, and dropping that would lose words the candidate actually said. Cleared on
+  // submit so a late flush cannot land in the next question's answer.
+  const capturingRef = useRef(false);
   const audioChunksRef = useRef<Blob[]>([]);
   const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
 
@@ -120,19 +127,30 @@ export default function HRStudio() {
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
+      // An interim result is a cumulative snapshot of the segment still being spoken, so it replaces
+      // the pending caption instead of adding to it; only a final result contributes text to the
+      // answer that is evaluated and stored. Appending every result is what produced the
+      // repeated-prefix transcript ("The", "The things", "The things that"…) this guards against.
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        if (!capturingRef.current) return;
+        for (const segment of liveTranscript.handle(event)) {
+          setAnswerText((prev) => (prev ? `${prev} ${segment}` : segment));
         }
-        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setLiveCaption(liveTranscript.pending());
       };
 
-      recognition.onerror = () => setIsRecording(false);
-      recognition.onend = () => setIsRecording(false);
+      const endRecognitionSession = () => {
+        capturingRef.current = false;
+        liveTranscript.reset();
+        setLiveCaption("");
+        setIsRecording(false);
+      };
+
+      recognition.onerror = endRecognitionSession;
+      recognition.onend = endRecognitionSession;
       recognitionRef.current = recognition;
     }
-  }, []);
+  }, [liveTranscript]);
 
   const handleSpeakQuestion = (text: string) => {
     if (!window.speechSynthesis) return;
@@ -174,7 +192,11 @@ export default function HRStudio() {
         recorder.start(250);
         mediaRecorderRef.current = recorder;
 
-        if (recognitionRef.current) recognitionRef.current.start();
+        if (recognitionRef.current) {
+          liveTranscript.reset();
+          capturingRef.current = true;
+          recognitionRef.current.start();
+        }
         setIsRecording(true);
       } catch (err) {
         console.warn("Microphone access failed:", err);
@@ -206,6 +228,8 @@ export default function HRStudio() {
       setQuestionCount(0);
       setElapsedSeconds(0);
       setAnswerText("");
+      setLiveCaption("");
+      liveTranscript.reset();
       setRecordedAudioBlob(null);
       localStorage.setItem("speakflow_active_hr_session", String(res.session_id));
       if (res.current_question?.text) {
@@ -231,6 +255,9 @@ export default function HRStudio() {
       }
       setIsRecording(false);
     }
+    // The answer being sent is the text above, frozen now: close the capture window so a final
+    // result the engine flushes on stop() cannot append to an answer that has already left.
+    capturingRef.current = false;
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
@@ -240,7 +267,12 @@ export default function HRStudio() {
     setErrorMsg(null);
 
     try {
-      const res = await submitHRAnswer(sessionId, answerText.trim(), recordedAudioBlob);
+      const res = await submitHRAnswer(
+        sessionId,
+        answerText.trim(),
+        recordedAudioBlob,
+        currentQuestion?.id || currentQuestion?.text || null
+      );
 
       if (res.is_complete && res.report) {
         localStorage.removeItem("speakflow_active_hr_session");
@@ -249,13 +281,35 @@ export default function HRStudio() {
         setCurrentQuestion(res.next_question);
         setQuestionCount(res.question_count);
         setAnswerText("");
+        setLiveCaption("");
+        liveTranscript.reset();
         setRecordedAudioBlob(null);
         if (res.next_question.text) {
           handleSpeakQuestion(res.next_question.text);
         }
       }
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.detail || "Failed to evaluate behavioral response.");
+      if (err?.response?.status === 409) {
+        // This tab was answering a question the round has already recorded an answer for — usually
+        // the voice agent heard it first. Re-read the round so the candidate is shown the question
+        // the server actually holds, instead of being stuck on a submit that keeps being refused.
+        try {
+          const live = await getHRSession(sessionId);
+          setCurrentQuestion(live.current_question);
+          setQuestionCount(live.question_count);
+          setErrorMsg(
+            live.current_question
+              ? "That answer arrived after the round had moved on, so it was not recorded over the "
+                + "answer already on file. The current question is shown again below."
+              : "This round has already finished; the answer was not recorded over the ones on file."
+          );
+        } catch {
+          setErrorMsg(err?.response?.data?.detail
+            || "That question is already answered on the record.");
+        }
+      } else {
+        setErrorMsg(err?.response?.data?.detail || "Failed to evaluate behavioral response.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -684,6 +738,17 @@ export default function HRStudio() {
 - Result: (What was the measurable outcome or learning?)"
           className="w-full p-4 rounded-xl bg-surface-container border border-outline-variant/40 text-on-surface text-sm font-sans leading-relaxed focus:outline-none focus:border-primary transition-colors resize-y min-h-[200px]"
         />
+
+        {liveCaption && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-xs text-outline italic pt-1"
+            title="Still being recognised. This line joins your answer when the engine finalizes it."
+          >
+            {liveCaption}
+          </p>
+        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
           <div className="flex items-center gap-3 text-xs text-outline">

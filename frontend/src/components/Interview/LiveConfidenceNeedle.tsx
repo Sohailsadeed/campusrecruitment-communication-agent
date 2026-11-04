@@ -77,6 +77,7 @@ export default function LiveConfidenceNeedle({
     0,
     Math.min(100, hasData ? emotion!.composure : 0)
   );
+  const hasProsody = hasData && (emotion!.pitch_mean_hz ?? 0) > 0;
 
   const band = BANDS.find((entry) => confidence >= entry.min)!.band;
   const angle = -90 + (confidence / 100) * 180;
@@ -151,6 +152,26 @@ export default function LiveConfidenceNeedle({
             {status}
           </span>
         </div>
+
+        {hasProsody && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {emotion!.is_monotone && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-[10px] font-semibold text-amber-400">
+                ⚡ Modulate Pitch
+              </span>
+            )}
+            {emotion!.vocal_tremor && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-[10px] font-semibold text-rose-400">
+                ⚠️ Voice Shaky / Breathe
+              </span>
+            )}
+            {!emotion!.is_monotone && !emotion!.vocal_tremor && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-[10px] font-semibold text-emerald-400">
+                ✨ Dynamic Tone
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>

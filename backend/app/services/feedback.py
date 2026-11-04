@@ -325,8 +325,13 @@ def _heuristic_feedback(
             p1 = "Effective communication plays a critical role in the workplace, aligning cross-functional teams and technical stakeholders across modern IT organizations."
             t1 = "Eliminate conversational openers and fragmented syntax. Lead with an authoritative thesis."
         else:
-            p1 = f"{cleaned_core.capitalize() if cleaned_core else text_clean[:60]}. Specifically, our primary objective was establishing clear operational ownership."
-            t1 = "Lead with direct assertive phrasing, eliminating conversational qualifiers and hesitation words."
+            p1_core = (cleaned_core or text_clean[:60]).strip().rstrip(".")
+            p1 = (
+                f"{p1_core[:1].upper() + p1_core[1:]}."
+                if p1_core
+                else f"A clear point about {topic} deserves a direct opening."
+            )
+            t1 = "Lead with direct assertive phrasing and eliminate conversational filler openers."
 
         rewrites.append({
             "timestamp": "00:09",
@@ -352,8 +357,13 @@ def _heuristic_feedback(
             for fl in ["basically", "you know", "like", "um", "uh", "right", "of course"]:
                 cleaned_s2 = re.sub(r"\b" + re.escape(fl) + r"\b", "", cleaned_s2, flags=re.IGNORECASE)
             cleaned_s2 = " ".join(cleaned_s2.split()).strip()
-            p2 = f"Furthermore, {cleaned_s2.lower() if cleaned_s2 else 'we reinforced our core milestones'} by establishing measurable performance benchmarks."
-            t2 = "Anchor intermediate points with concrete outcomes and eliminate repetitive filler words."
+            p2_core = (cleaned_s2 or text_clean[:60]).strip().rstrip(".")
+            p2 = (
+                f"Building on that idea: {p2_core}."
+                if p2_core
+                else f"Building on that idea, a concrete example about {topic} would make the point clearer."
+            )
+            t2 = "Anchor intermediate points with concrete details and eliminate repetitive filler words."
 
         rewrites.append({
             "timestamp": "00:28",
@@ -375,7 +385,12 @@ def _heuristic_feedback(
             for fl in ["and yeah", "yeah", "right", "like", "so"]:
                 cleaned_s3 = re.sub(r"\b" + re.escape(fl) + r"\b", "", cleaned_s3, flags=re.IGNORECASE)
             cleaned_s3 = " ".join(cleaned_s3.split()).strip()
-            p3 = f"In conclusion, {cleaned_s3.lower() if cleaned_s3 else 'this experience demonstrated'} the critical value of proactive communication and disciplined execution."
+            p3_core = (cleaned_s3 or text_clean[:60]).strip().rstrip(".")
+            p3 = (
+                f"To close, {p3_core}."
+                if p3_core
+                else f"To close, restate the main takeaway about {topic} in one clear sentence."
+            )
             t3 = "Synthesize your response into a decisive closing takeaway rather than trailing off."
 
         rewrites.append({

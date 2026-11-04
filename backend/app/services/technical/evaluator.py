@@ -1,54 +1,50 @@
-"""Technical interview evaluator using OpenRouter Nemotron with local Ollama fallback."""
+"""Technical interview evaluator; the LLM provider is chosen by configuration, local by default."""
 import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
+from app.services import llm_client
 from app.services.technical.sentence_analysis import (
     apply_sentence_labels,
     build_sentences_from_text,
     format_sentences_for_prompt,
 )
-from config import settings
 
 logger = logging.getLogger(__name__)
 
 _llm = None
-_cached_key = None
+_cached_signature = None
+
+CLIENT_TEMPERATURE = 0.7
+CLIENT_MAX_TOKENS = 2048
+
+
+class EvaluationUnavailable(RuntimeError):
+    """The configured model could not produce an evaluation, and nothing here stands in for one.
+
+    The in-round fallbacks below (`score 6`, `total_score 75`) exist so a live round can keep
+    moving when a single answer cannot be scored. A finished round's report is the opposite case: a
+    candidate who is promised a score for the whole interview must not be handed a number the model
+    never produced, so the end-of-session pass asks for strict mode and this error reaches the route
+    instead. The route turns it into a retryable failure, leaving the session incomplete.
+    """
 
 
 def _get_llm():
-    """Get LLM instance: Nemotron via OpenRouter, falling back to local Ollama."""
-    global _llm, _cached_key
-    import os
-    from dotenv import dotenv_values
+    """Return this round's chat client, built from the shared provider decision.
 
-    # Dynamically re-read .env if key is updated
-    env_vals = dotenv_values(str(settings.upload_dir.parent / ".env"))
-    current_key = env_vals.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
-
-    if _llm is None or _cached_key != current_key:
-        _cached_key = current_key
-        if current_key and current_key.startswith("sk-"):
-            logger.info("Using OpenRouter LLM: %s", settings.chat_model)
-            _llm = ChatOpenAI(
-                model=settings.chat_model,
-                api_key=current_key,
-                base_url=settings.openrouter_base_url,
-                max_tokens=2048,
-                temperature=0.7,
-            )
-        else:
-            logger.info("OpenRouter key not found. Using local Ollama fallback: %s at %s", settings.ollama_model, settings.ollama_base_url)
-            from langchain_community.chat_models import ChatOllama
-            _llm = ChatOllama(
-                base_url=settings.ollama_base_url,
-                model=settings.ollama_model,
-                temperature=0.7,
-            )
+    The selection rule lives in `app.services.llm_client`: configuration picks the provider, a
+    credential never does, and an unavailable local model is an error rather than a remote request.
+    """
+    global _llm, _cached_signature
+    signature = llm_client.cache_signature()
+    if _llm is None or _cached_signature != signature:
+        _cached_signature = signature
+        _llm = llm_client.build_chat_client("Technical Evaluator", temperature=CLIENT_TEMPERATURE,
+                                           max_tokens=CLIENT_MAX_TOKENS)
     return _llm
 
 
@@ -398,11 +394,16 @@ async def evaluate_answer(
     answer: str,
     resume_context: str,
     sentences: Optional[List[Dict[str, Any]]] = None,
+    strict: bool = False,
 ) -> dict:
     """Evaluate candidate answer using LangChain LCEL.
 
     ``sentences`` may carry deterministic ASR timestamps. The LLM only labels
     sentence indices; timings are always derived from the supplied spans.
+
+    ``strict`` changes only what a failure means: with it, a model or parsing failure raises
+    :class:`EvaluationUnavailable` instead of returning the recorded fallback score. The criteria,
+    the prompt and the score arithmetic are identical either way.
     """
     default_fallback = {
         "score": 6,
@@ -488,6 +489,11 @@ async def evaluate_answer(
             "sentences": tagged_sentences,
         }
     except Exception as exc:
+        if strict:
+            logger.warning("Answer evaluation failed (%s). Refusing to score a finished round with "
+                           "a fallback.", exc)
+            raise EvaluationUnavailable(
+                f"answer evaluation unavailable ({type(exc).__name__})") from exc
         logger.warning("Answer evaluation failed (%s). Using fallback evaluation.", exc)
         return {
             **default_fallback,
@@ -510,8 +516,13 @@ async def evaluate_answer(
         }
 
 
-async def generate_report(questions_asked: list[dict], role: str) -> dict:
-    """Generate final interview scorecard and report using LangChain LCEL."""
+async def generate_report(questions_asked: list[dict], role: str, strict: bool = False) -> dict:
+    """Generate final interview scorecard and report using LangChain LCEL.
+
+    ``strict`` raises :class:`EvaluationUnavailable` when the model produces no report, or no
+    overall score inside one, instead of returning the fixed 75. The averages it does keep on a
+    partial response are recomputed from the answers' own scores, so they stay empirical either way.
+    """
     questions_summary = "\n".join(
         f"Q: {q.get('text', '')} | A: {q.get('answer', 'N/A')} | "
         f"Score: {q.get('score', 'N/A')} | Conciseness: {q.get('conciseness_score', 'N/A')}/10 | "
@@ -556,6 +567,8 @@ async def generate_report(questions_asked: list[dict], role: str) -> dict:
         try:
             total_score = int(float(total_score))
         except (ValueError, TypeError):
+            if strict:
+                raise EvaluationUnavailable("report carried no parseable total score")
             total_score = default_fallback["total_score"]
 
         avg_conciseness = result.get("avg_conciseness_score")
@@ -589,6 +602,15 @@ async def generate_report(questions_asked: list[dict], role: str) -> dict:
             "weaknesses": weaknesses if isinstance(weaknesses, list) else [str(weaknesses)],
             "summary": str(summary),
         }
+    except EvaluationUnavailable:
+        # A report the model did return but that could not carry a score: the named reason is the
+        # candidate-facing one, so it reaches the route without being wrapped again below.
+        raise
     except Exception as exc:
+        if strict:
+            logger.warning("Report generation failed (%s). Refusing to publish a fallback report.",
+                           exc)
+            raise EvaluationUnavailable(
+                f"report generation unavailable ({type(exc).__name__})") from exc
         logger.warning("Report generation failed (%s). Using fallback report.", exc)
         return default_fallback

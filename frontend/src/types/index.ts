@@ -88,6 +88,7 @@ export interface VerbalIQReport {
   rewrites?: CriticalRewrite[];
   competencies?: CompetencyVector;
   prosody?: ProsodyMetrics;
+  vocal_delivery?: VocalDelivery;
   mastery_points?: MasteryPoint[];
   curated_drills?: CuratedDrill[];
   cadence_sparkline?: number[];
@@ -118,8 +119,6 @@ export interface SessionSummary {
   title: string;
   description: string | null;
   duration_seconds: number;
-  video_path: string | null;
-  audio_path: string | null;
   status: SessionStatus;
   created_at: string;
   round_type?: string;
@@ -223,6 +222,18 @@ export interface VocalDeliveryTimelinePoint {
   dominance?: number;
 }
 
+export interface VocalProsodyMetrics {
+  pitch_mean_hz: number;
+  pitch_std_hz: number;
+  is_monotone: boolean;
+  dynamic_range_semitones: number;
+  vocal_jitter_percent: number;
+  vocal_shimmer_percent: number;
+  hnr_db: number;
+  vocal_tremor_flag: boolean;
+  delivery_clarity: string;
+}
+
 export interface VocalDelivery {
   summary?: VocalDeliverySummary;
   dimensions?: {
@@ -231,4 +242,5 @@ export interface VocalDelivery {
     dominance?: number;
   };
   timeline?: VocalDeliveryTimelinePoint[];
+  prosody?: VocalProsodyMetrics;
 }

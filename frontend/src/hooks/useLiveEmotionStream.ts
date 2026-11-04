@@ -5,6 +5,10 @@ export interface LiveEmotionState {
   nervousness: number;
   composure: number;
   delivery_style?: string;
+  pitch_mean_hz?: number;
+  pitch_std_hz?: number;
+  is_monotone?: boolean;
+  vocal_tremor?: boolean;
 }
 
 export interface CoachNudge {
@@ -47,15 +51,19 @@ function resolveWsBase(): string {
 export function useLiveEmotionStream(
   sessionId: number | null,
   isRecording: boolean,
-  context?: LiveStreamContext
+  context?: LiveStreamContext,
+  externalStream?: MediaStream | null
 ): UseLiveEmotionStreamResult {
   const [liveEmotion, setLiveEmotion] = useState<LiveEmotionState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [nudge, setNudge] = useState<CoachNudge | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const ownsStreamRef = useRef(false);
   const cancelledRef = useRef(false);
   const contextRef = useRef<LiveStreamContext | undefined>(context);
 
@@ -68,31 +76,52 @@ export function useLiveEmotionStream(
   }, [isRecording]);
 
   useEffect(() => {
-    if (!sessionId || !isRecording) {
+    if (sessionId === null || !isRecording) {
       return;
     }
 
     cancelledRef.current = false;
     let ws: WebSocket | null = null;
-    let recorder: MediaRecorder | null = null;
+    let audioCtx: AudioContext | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let workletNode: AudioWorkletNode | null = null;
     let stream: MediaStream | null = null;
+    let ownsStream = false;
 
     const cleanup = () => {
       cancelledRef.current = true;
 
-      if (recorder && recorder.state !== "inactive") {
+      if (workletNode) {
+        workletNode.port.onmessage = null;
         try {
-          recorder.stop();
+          workletNode.disconnect();
         } catch {
-          // ignore recorder shutdown errors
+          // ignore worklet shutdown errors
         }
       }
-      recorderRef.current = null;
+      workletNodeRef.current = null;
 
-      if (stream) {
+      if (source) {
+        try {
+          source.disconnect();
+        } catch {
+          // ignore source shutdown errors
+        }
+      }
+      sourceNodeRef.current = null;
+
+      if (audioCtx) {
+        void audioCtx.close().catch(() => {
+          // ignore audio context shutdown errors
+        });
+      }
+      audioContextRef.current = null;
+
+      if (stream && ownsStream) {
         stream.getTracks().forEach((track) => track.stop());
       }
       streamRef.current = null;
+      ownsStreamRef.current = false;
 
       if (
         ws &&
@@ -159,6 +188,16 @@ export function useLiveEmotionStream(
                 composure:
                   typeof data.composure === "number" ? data.composure : 0,
                 delivery_style: data.delivery_style,
+                pitch_mean_hz:
+                  typeof data.pitch_mean_hz === "number"
+                    ? data.pitch_mean_hz
+                    : 0,
+                pitch_std_hz:
+                  typeof data.pitch_std_hz === "number"
+                    ? data.pitch_std_hz
+                    : 0,
+                is_monotone: Boolean(data.is_monotone),
+                vocal_tremor: Boolean(data.vocal_tremor),
               });
             }
           } catch {
@@ -166,34 +205,71 @@ export function useLiveEmotionStream(
           }
         };
 
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (externalStream && externalStream.getAudioTracks().length > 0) {
+          stream = new MediaStream(externalStream.getAudioTracks());
+        } else {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          ownsStream = true;
+          ownsStreamRef.current = true;
+        }
         if (cancelledRef.current) {
-          stream.getTracks().forEach((track) => track.stop());
+          if (ownsStream) {
+            stream.getTracks().forEach((track) => track.stop());
+          }
           return;
         }
         streamRef.current = stream;
 
-        const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm"];
-        const mimeType =
-          mimeCandidates.find((candidate) =>
-            MediaRecorder.isTypeSupported(candidate)
-          ) || "";
+        const AudioContextCtor =
+          window.AudioContext ||
+          (
+            window as typeof window & {
+              webkitAudioContext?: typeof AudioContext;
+            }
+          ).webkitAudioContext;
+        if (!AudioContextCtor) {
+          throw new Error("AudioContext is not supported");
+        }
 
-        recorder = new MediaRecorder(
-          stream,
-          mimeType ? { mimeType } : undefined
+        audioCtx = new AudioContextCtor();
+        audioContextRef.current = audioCtx;
+        await audioCtx.audioWorklet.addModule(
+          `${import.meta.env.BASE_URL}audio-processor.js`
         );
-        recorderRef.current = recorder;
+        if (cancelledRef.current) return;
+        if (audioCtx.state === "suspended") {
+          await audioCtx.resume();
+        }
+        if (cancelledRef.current) return;
 
-        recorder.ondataavailable = (event) => {
-          if (!event.data || event.data.size === 0) return;
+        source = audioCtx.createMediaStreamSource(stream);
+        sourceNodeRef.current = source;
+        workletNode = new AudioWorkletNode(audioCtx, "pcm-worklet-processor");
+        workletNodeRef.current = workletNode;
+        workletNode.port.onmessage = (event) => {
           if (ws && ws.readyState === WebSocket.OPEN) {
             ws.send(event.data);
           }
         };
-
-        recorder.start(1500);
+        source.connect(workletNode);
+        workletNode.connect(audioCtx.destination);
       } catch {
+        if (ownsStream && stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+        if (audioCtx) {
+          void audioCtx.close().catch(() => {
+            // ignore audio context shutdown errors
+          });
+        }
+        if (ws) {
+          try {
+            ws.close();
+          } catch {
+            // ignore socket shutdown errors
+          }
+        }
+        wsRef.current = null;
         setIsConnected(false);
       }
     };
@@ -201,7 +277,7 @@ export function useLiveEmotionStream(
     start();
 
     return cleanup;
-  }, [sessionId, isRecording]);
+  }, [sessionId, isRecording, externalStream]);
 
   const category = context?.category;
   const question = context?.question;
@@ -227,14 +303,27 @@ export function useLiveEmotionStream(
 
   useEffect(() => {
     return () => {
-      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      if (workletNodeRef.current) {
+        workletNodeRef.current.port.onmessage = null;
         try {
-          recorderRef.current.stop();
+          workletNodeRef.current.disconnect();
         } catch {
           // ignore
         }
       }
-      if (streamRef.current) {
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.disconnect();
+        } catch {
+          // ignore
+        }
+      }
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch(() => {
+          // ignore
+        });
+      }
+      if (streamRef.current && ownsStreamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
       if (wsRef.current) {

@@ -27,11 +27,12 @@ class SessionUpdate(BaseModel):
 
 
 class SessionOut(SessionBase):
+    """Never gain `audio_path`/`video_path`: they are absolute server-side paths, and
+    playback goes through `SessionDetailOut.audio_url` (the authenticated API route)."""
+
     id: int
     user_id: Optional[int] = None
     duration_seconds: float
-    video_path: Optional[str] = None
-    audio_path: Optional[str] = None
     status: str
     created_at: datetime
 

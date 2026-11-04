@@ -5,6 +5,7 @@ __pycache__/
 *.pyd
 .env
 .env.local
+.env.livekit
 .venv/
 venv/
 env/
@@ -34,4 +35,6 @@ backend/instance/
 .vite/
 frontend/.vite/
 backend/cleaned.json
+# Downloaded TTS model weights and voice packs — acquired locally, never committed.
+backend/models/
 .cadra/

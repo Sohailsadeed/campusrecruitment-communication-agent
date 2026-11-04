@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { getHRReport, HRSessionResponse, HRQuestionItem } from "../../api/hr";
 import VocalDeliveryCard from "../../components/Interview/VocalDeliveryCard";
+import SpeechDeliveryCard from "../../components/Interview/SpeechDeliveryCard";
+import { AnswerProvenanceChip, ReportProvenanceStrip } from "../../components/Interview/EvaluatorProvenance";
+import { ProtectedAudioPlayer } from "../../components/Recording/ProtectedAudioPlayer";
 
 export default function HRReport() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -183,6 +186,8 @@ export default function HRReport() {
         accent="primary"
       />
 
+      <SpeechDeliveryCard speech={reportSummary?.speech} />
+
       {/* Top Banner: Score & 3 Diagnostic Pillars */}
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-4 gap-4 print:grid-cols-4">
         {/* Overall Behavioral Score */}
@@ -307,6 +312,13 @@ export default function HRReport() {
                   {q.evaluation.overall_score}
                 </span>
               )}
+              {q.evaluation && q.evaluation.evaluator_basis && q.evaluation.evaluator_basis !== "model" && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0"
+                  title="Not scored by a model"
+                  aria-label="Not scored by a model"
+                />
+              )}
             </button>
           ))}
         </div>
@@ -334,7 +346,7 @@ export default function HRReport() {
                 <div className="flex items-center gap-2 bg-surface-container-high px-3 py-1.5 rounded-lg border border-outline-variant/30 print:hidden">
                   <span className="material-symbols-outlined text-[18px] text-secondary">mic</span>
                   <span className="text-xs font-medium text-on-surface">Your Articulation:</span>
-                  <audio controls src={currentQ.audio_url} className="h-7 w-48 sm:w-56" />
+                  <ProtectedAudioPlayer audioUrl={currentQ.audio_url} className="h-7 w-48 sm:w-56" />
                 </div>
               )}
             </div>
@@ -353,6 +365,8 @@ export default function HRReport() {
                 {currentQ.answer || "No response text captured."}
               </p>
             </div>
+
+            <AnswerProvenanceChip evaluation={evalData} />
           </div>
 
           {/* STAR Method Quadrant Breakdown */}
@@ -694,6 +708,8 @@ export default function HRReport() {
           </p>
         </div>
       )}
+
+      <ReportProvenanceStrip report={reportSummary} />
 
       {/* Bottom Footer Actions */}
       <div className="relative z-10 flex flex-wrap items-center justify-between gap-4 pt-6 border-t border-outline-variant/20 print:hidden">

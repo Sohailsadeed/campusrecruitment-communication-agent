@@ -1,6 +1,7 @@
 """SpeakFlow FastAPI application entry point."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import FastAPI
@@ -11,7 +12,8 @@ from app.database.seed_hr import seed_hr_questions
 from app.models import AIFeedback, CurriculumPlan, HRInterview, HRQuestion, SessionAnalysis, SessionModel, Transcription, User  # noqa: F401
 import sys
 from logging.handlers import RotatingFileHandler
-from app.routes import analysis, auth, coach, emotion_stream, feedback, guesstimate, hr, progress, sessions, technical
+from app.routes import analysis, auth, coach, emotion_stream, feedback, guesstimate, hr, livekit, progress, sessions, technical
+from app.services.emotion import _load_model
 from config import settings
 
 # Configure structured file and console logging
@@ -81,16 +83,30 @@ def create_app() -> FastAPI:
     app.include_router(technical.router)
     app.include_router(guesstimate.router)
     app.include_router(hr.router)
+    app.include_router(livekit.router)
     app.include_router(coach.router)
     app.include_router(emotion_stream.router)
 
     @app.on_event("startup")
-    def on_startup() -> None:
+    async def on_startup() -> None:
         logger.info("Creating database tables and applying migrations")
         Base.metadata.create_all(bind=engine)
         check_and_apply_migrations()
         with SessionLocal() as db:
             seed_hr_questions(db)
+
+        logger.info("Warming up audEERING emotion model in background")
+        warmup_task = asyncio.create_task(asyncio.to_thread(_load_model))
+        app.state.emotion_warmup_task = warmup_task
+
+        def _log_warmup_result(task: asyncio.Task) -> None:
+            try:
+                task.result()
+                logger.info("audEERING emotion model warmed up.")
+            except Exception as exc:
+                logger.warning("audEERING emotion model warmup failed: %s", exc)
+
+        warmup_task.add_done_callback(_log_warmup_result)
         logger.info("SpeakFlow API ready with multi-round database schema and HR question bank")
 
     @app.get("/")

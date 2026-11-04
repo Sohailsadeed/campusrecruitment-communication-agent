@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import Card from "../Common/Card";
+import { useAuth } from "../../context/AuthContext";
 import {
   getActiveCurriculumPlan,
   generateCurriculumPlan,
@@ -17,6 +18,92 @@ const TARGET_ROLES = [
   "Data & AI Engineer",
 ];
 
+/** Which coach request produced a failure, so Retry re-issues that same request. */
+type FailedRequest =
+  | { action: "load" }
+  | { action: "generate"; force: boolean }
+  | { action: "complete"; dayNumber: number }
+  | { action: "sync" };
+
+type CoachFailureKind = "auth" | "access" | "network";
+
+interface CoachFailure {
+  kind: CoachFailureKind;
+  headline: string;
+  detail: string;
+}
+
+/** Maps the backend's status onto copy. Authorization stays on the server: this decides nothing
+ *  about who is allowed, only what a refusal looks like. A 401 has already had its token dropped
+ *  by the apiClient response interceptor, so the only useful offer left is to sign in again. */
+function toCoachFailure(err: unknown): CoachFailure {
+  const status = (err as { response?: { status?: number } } | null)?.response?.status;
+  if (status === 401) {
+    return {
+      kind: "auth",
+      headline: "Sign in required",
+      detail: "Your session is missing or expired, so the curriculum plan cannot be read.",
+    };
+  }
+  if (status === 403 || status === 404) {
+    return {
+      kind: "access",
+      headline: "Curriculum plan unavailable",
+      detail: `The coach refused this plan (HTTP ${status}). It may belong to another account.`,
+    };
+  }
+  if (typeof status === "number") {
+    return {
+      kind: "network",
+      headline: "Curriculum request failed",
+      detail: `The server reported HTTP ${status}. Your plan was not loaded.`,
+    };
+  }
+  return {
+    kind: "network",
+    headline: "Could not reach the coach",
+    detail: "No response from the API. Check that the backend is running, then retry.",
+  };
+}
+
+function FailureBanner({
+  failure,
+  onRetry,
+  onSignIn,
+}: {
+  failure: CoachFailure;
+  onRetry: () => void;
+  onSignIn: () => void;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg bg-error/10 border border-error/30 p-2.5" role="alert">
+      <span className="material-symbols-outlined text-[18px] text-error">error</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-semibold text-on-surface">{failure.headline}</span>
+        <span className="text-[11px] text-on-surface-variant">{failure.detail}</span>
+        <div className="mt-1 flex items-center gap-2">
+          {failure.kind === "auth" && (
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="w-fit rounded bg-secondary px-2 py-1 text-[10px] font-semibold text-on-secondary hover:opacity-90"
+            >
+              Sign in
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onRetry}
+            className="w-fit rounded border border-outline-variant/40 px-2 py-1 text-[10px] font-semibold text-on-surface hover:bg-surface-container-high"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CurriculumCoachCard() {
   const [plan, setPlan] = useState<CurriculumPlan | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,6 +112,9 @@ export default function CurriculumCoachCard() {
   const [selectedRole, setSelectedRole] = useState(TARGET_ROLES[0]);
   const [selectedDayNumber, setSelectedDayNumber] = useState<number>(1);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [planFailure, setPlanFailure] = useState<CoachFailure | null>(null);
+  const [actionFailure, setActionFailure] = useState<{ request: FailedRequest; failure: CoachFailure } | null>(null);
+  const { openAuthModal } = useAuth();
 
   const fetchPlan = async () => {
     try {
@@ -41,8 +131,11 @@ export default function CurriculumCoachCard() {
       } else {
         setPlan(null);
       }
+      setPlanFailure(null);
     } catch (err) {
       console.error("Failed to fetch curriculum plan:", err);
+      // A failed read is not an empty curriculum: keep whatever plan was loaded and say it failed.
+      setPlanFailure(toCoachFailure(err));
     } finally {
       setLoading(false);
     }
@@ -67,8 +160,10 @@ export default function CurriculumCoachCard() {
           setSelectedDayNumber(activeDay.day_number);
         }
       }
+      setActionFailure(null);
     } catch (err) {
       console.error("Failed to generate plan:", err);
+      setActionFailure({ request: { action: "generate", force }, failure: toCoachFailure(err) });
     } finally {
       setIsGenerating(false);
     }
@@ -84,8 +179,10 @@ export default function CurriculumCoachCard() {
       if (res.success) {
         await fetchPlan();
       }
+      setActionFailure(null);
     } catch (err) {
       console.error("Failed to complete day:", err);
+      setActionFailure({ request: { action: "complete", dayNumber }, failure: toCoachFailure(err) });
     }
   };
 
@@ -100,13 +197,23 @@ export default function CurriculumCoachCard() {
       } else {
         setSyncMessage(res.message || "No new completed sessions matching current day.");
       }
+      setActionFailure(null);
     } catch (err) {
       console.error("Failed to auto-sync drills:", err);
-      setSyncMessage("Sync error. Please try again.");
+      setActionFailure({ request: { action: "sync" }, failure: toCoachFailure(err) });
     } finally {
       setIsSyncing(false);
       setTimeout(() => setSyncMessage(null), 4000);
     }
+  };
+
+  /** Re-issues the request that failed, rather than a generic reload. */
+  const retryFailedRequest = (request: FailedRequest) => {
+    setActionFailure(null);
+    if (request.action === "generate") void handleGenerate(request.force);
+    else if (request.action === "complete") void handleMarkComplete(request.dayNumber);
+    else if (request.action === "sync") void handleAutoSync();
+    else void fetchPlan();
   };
 
   const getRoundBadge = (round: string) => {
@@ -134,10 +241,38 @@ export default function CurriculumCoachCard() {
     );
   }
 
+  // The plan could not be read and nothing is loaded: this is a failure, not an empty curriculum.
+  if (planFailure && !plan) {
+    return (
+      <Card className="border-error/30">
+        <div className="py-6">
+          <h2 className="text-lg font-bold text-on-surface mb-3">Autonomous Curriculum Coach</h2>
+          <FailureBanner
+            failure={planFailure}
+            onSignIn={openAuthModal}
+            onRetry={() => {
+              setPlanFailure(null);
+              void fetchPlan();
+            }}
+          />
+        </div>
+      </Card>
+    );
+  }
+
   // Empty state: No active plan yet
   if (!plan) {
     return (
       <Card className="border-secondary/30 bg-gradient-to-br from-surface-container-low via-surface-container to-surface-container-low relative overflow-hidden">
+        {actionFailure && (
+          <div className="mb-4 relative z-10">
+            <FailureBanner
+              failure={actionFailure.failure}
+              onSignIn={openAuthModal}
+              onRetry={() => retryFailedRequest(actionFailure.request)}
+            />
+          </div>
+        )}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 p-2">
           <div className="space-y-2 max-w-xl">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary/15 text-secondary border border-secondary/30 font-label-numeric-sm text-[11px] font-medium">
@@ -194,6 +329,12 @@ export default function CurriculumCoachCard() {
   const completedCount = days.filter((d) => d.status === "completed").length;
   const progressPercent = Math.round((completedCount / days.length) * 100);
   const bottlenecks: CurriculumBottleneck[] = plan.identified_bottlenecks || [];
+  // A refresh that failed while an older plan is on screen must stay visible as a failure.
+  const visibleFailure: { request: FailedRequest; failure: CoachFailure } | null = actionFailure
+    ? actionFailure
+    : planFailure
+      ? { request: { action: "load" }, failure: planFailure }
+      : null;
 
   return (
     <Card className="border-secondary/30 bg-surface-container-low relative overflow-hidden shadow-xl">
@@ -255,6 +396,16 @@ export default function CurriculumCoachCard() {
           </button>
         </div>
       </div>
+
+      {visibleFailure && (
+        <div className="mt-4">
+          <FailureBanner
+            failure={visibleFailure.failure}
+            onSignIn={openAuthModal}
+            onRetry={() => retryFailedRequest(visibleFailure.request)}
+          />
+        </div>
+      )}
 
       {/* Diagnosed Bottlenecks Strip */}
       {bottlenecks.length > 0 && (

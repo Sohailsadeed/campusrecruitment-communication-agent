@@ -1,4 +1,4 @@
-"""Guesstimate interview evaluation service using OpenRouter Nemotron / Ollama fallback."""
+"""Guesstimate interview evaluation service; the LLM provider is chosen by configuration, local by default."""
 import logging
 import math
 import re
@@ -6,45 +6,31 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from config import settings
+from app.services import llm_client
 
 logger = logging.getLogger(__name__)
 
 _llm = None
-_cached_key = None
+_cached_signature = None
+
+CLIENT_TEMPERATURE = 0.6
+CLIENT_MAX_TOKENS = 2500
 
 
 def _get_llm():
-    """Get LLM instance: Nemotron via OpenRouter, falling back to local Ollama."""
-    global _llm, _cached_key
-    import os
-    from dotenv import dotenv_values
+    """Return this round's chat client, built from the shared provider decision.
 
-    env_vals = dotenv_values(str(settings.upload_dir.parent / ".env"))
-    current_key = env_vals.get("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
-
-    if _llm is None or _cached_key != current_key:
-        _cached_key = current_key
-        if current_key and current_key.startswith("sk-"):
-            logger.info("Guesstimate Evaluator using OpenRouter LLM: %s", settings.chat_model)
-            _llm = ChatOpenAI(
-                model=settings.chat_model,
-                api_key=current_key,
-                base_url=settings.openrouter_base_url,
-                max_tokens=2500,
-                temperature=0.6,
-            )
-        else:
-            logger.info("Guesstimate Evaluator using local Ollama fallback: %s at %s", settings.ollama_model, settings.ollama_base_url)
-            from langchain_community.chat_models import ChatOllama
-            _llm = ChatOllama(
-                base_url=settings.ollama_base_url,
-                model=settings.ollama_model,
-                temperature=0.6,
-            )
+    The selection rule lives in `app.services.llm_client`: configuration picks the provider, a
+    credential never does, and an unavailable local model is an error rather than a remote request.
+    """
+    global _llm, _cached_signature
+    signature = llm_client.cache_signature()
+    if _llm is None or _cached_signature != signature:
+        _cached_signature = signature
+        _llm = llm_client.build_chat_client("Guesstimate Evaluator", temperature=CLIENT_TEMPERATURE,
+                                            max_tokens=CLIENT_MAX_TOKENS)
     return _llm
 
 

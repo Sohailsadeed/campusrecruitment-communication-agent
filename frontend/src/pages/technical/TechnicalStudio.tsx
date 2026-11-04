@@ -1,16 +1,25 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   startTechnicalInterview,
   submitTechnicalAnswer,
+  processTechnicalRound,
+  requestTechnicalQuestion,
+  evaluateTechnicalRound,
   uploadResume,
   getResumeStatus,
   clearResume,
   getTechnicalSession,
   QuestionItem,
+  QuestionTurnResponse,
 } from "../../api/technical";
 import { useLiveEmotionStream } from "../../hooks/useLiveEmotionStream";
+import { LiveTranscriptAggregator } from "../../lib/liveTranscript";
+import { AnswerCapture, startTake } from "../../lib/answerCapture";
+import type { Take } from "../../lib/answerCapture";
 import LiveConfidenceNeedle from "../../components/Interview/LiveConfidenceNeedle";
+
+const ACTIVE_SESSION_KEY = "speakflow_active_technical_session";
 
 const ROLE_PRESETS = [
   { label: "Full Stack Engineer", icon: "layers", desc: "React, Node.js, distributed caches, and system design" },
@@ -77,7 +86,7 @@ export default function TechnicalStudio() {
     if (paramSessionId) return Number(paramSessionId);
     const queryId = searchParams.get("session_id");
     if (queryId) return Number(queryId);
-    const cached = localStorage.getItem("speakflow_active_technical_session");
+    const cached = localStorage.getItem(ACTIVE_SESSION_KEY);
     return cached ? Number(cached) : null;
   });
   const [currentQuestion, setCurrentQuestion] = useState<QuestionItem | null>(null);
@@ -86,6 +95,12 @@ export default function TechnicalStudio() {
   const [isRestoringSession, setIsRestoringSession] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  // "live" asks and queues answers; "compiling" is the single end-of-round evaluation; "retry" is that
+  // evaluation having failed, with every answer still saved and the round still open on the server.
+  const [reportPhase, setReportPhase] = useState<"live" | "compiling" | "retry">("live");
+  // The deferred pass (transcription + vocal delivery for a stored answer) failing. The answer itself is
+  // on the record when this is set, so the fix is to retry that pass -- never to submit the answer again.
+  const [processingFault, setProcessingFault] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -94,8 +109,16 @@ export default function TechnicalStudio() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [recordedAudioBlob, setRecordedAudioBlob] = useState<Blob | null>(null);
   const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  // One capture window per question. A recognition callback or a recorder `onstop` carries the token of
+  // the question that started it, so an old question can never write into the answer now on screen, and
+  // the window closes the moment a submit begins instead of when the response arrives.
+  const capture = useMemo(() => new AnswerCapture(), []);
+  const takeRef = useRef<Take | null>(null);
+  const recognitionTokenRef = useRef<number | null>(null);
+  const evaluationInFlightRef = useRef(false);
+  const processingInFlightRef = useRef(false);
+  const liveTranscript = useMemo(() => new LiveTranscriptAggregator(), []);
+  const [liveCaption, setLiveCaption] = useState("");
   const { liveEmotion } = useLiveEmotionStream(sessionId, isRecording);
 
   // Check if candidate already has an indexed resume from a prior session
@@ -120,17 +143,143 @@ export default function TechnicalStudio() {
     };
   }, []);
 
+  /**
+   * Score the finished round once and open its report.
+   *
+   * This is the only place the Technical evaluator is asked to run, and it runs after the last answer is
+   * already on the record. A failure leaves the answers and the open session exactly as they were, so the
+   * candidate retries the same call instead of re-answering, and the report page is never navigated to on
+   * a report the server did not persist.
+   */
+  const runFinalEvaluation = async (targetSessionId: number) => {
+    if (evaluationInFlightRef.current) return;
+    evaluationInFlightRef.current = true;
+    setReportPhase("compiling");
+    setErrorMsg(null);
+    try {
+      await evaluateTechnicalRound(targetSessionId);
+      localStorage.removeItem(ACTIVE_SESSION_KEY);
+      navigate(`/technical/report/${targetSessionId}`);
+    } catch (err: any) {
+      setErrorMsg(
+        err?.response?.data?.detail ||
+          "The final evaluation could not be completed. Your answers are saved and this round is " +
+            "still open — retry to generate the report."
+      );
+      setReportPhase("retry");
+    } finally {
+      evaluationInFlightRef.current = false;
+    }
+  };
+
+  /**
+   * Run the deferred recording analysis and surface whatever it could not finish.
+   *
+   * `blocking` says whether the caller needs the result now. Mid-round the candidate already has the next
+   * question on screen, so a pass another request still holds is left alone and nothing is shown as failed.
+   * Before the report, this is the thing being waited on: the evaluation may not run on unanalysed answers,
+   * so anything outstanding returns false and the retry button re-enters here.
+   */
+  const analyseRound = async (targetSessionId: number, blocking: boolean): Promise<boolean> => {
+    try {
+      const res = await processTechnicalRound(targetSessionId);
+      if (res.processing === "done") {
+        setProcessingFault(null);
+        return true;
+      }
+      if (res.errors.length) {
+        setProcessingFault(
+          `Your answer is saved, but recording analysis failed: ${res.errors.join("; ")}`
+        );
+        return false;
+      }
+      if (!blocking) {
+        // Nothing failed; a lease another request holds covers the rest. The report path waits for it.
+        return false;
+      }
+      setProcessingFault(
+        "Recording analysis from an earlier answer is still running. Retry in a moment to finish the report."
+      );
+      return false;
+    } catch (err: any) {
+      setProcessingFault(
+        err?.response?.data?.detail ||
+          "Your answers are saved, but the recording analysis could not run. Retry to continue."
+      );
+      return false;
+    }
+  };
+
+  /**
+   * Move the round on: the next question first, then the audio work on its own.
+   *
+   * The question comes from the generator alone, so Whisper and the prosody pass never delay what the
+   * candidate reads. The analysis follows as a separate call and updates the persisted answer it belongs to,
+   * under a server-side lease that keeps a duplicate request from transcribing the same clip twice or
+   * landing a stale transcript over a newer answer. Because both halves read and write the session row, a
+   * reload or a server restart resumes whichever one is still owed.
+   *
+   * False means the round did not move and the caller stays locked: an answer is already stored, so the only
+   * safe next action is to retry, never to submit the same answer a second time.
+   */
+  const advanceRound = async (targetSessionId: number): Promise<boolean> => {
+    if (processingInFlightRef.current) return false;
+    processingInFlightRef.current = true;
+    try {
+      let turn: QuestionTurnResponse;
+      try {
+        turn = await requestTechnicalQuestion(targetSessionId);
+      } catch (err: any) {
+        setProcessingFault(
+          err?.response?.data?.detail ||
+            "Your answer is saved, but the next question did not arrive. Retry to continue this round."
+        );
+        return false;
+      }
+      setQuestionCount(turn.question_count);
+
+      if (turn.next_question) {
+        capture.nextQuestion();
+        setReportPhase("live");
+        setCurrentQuestion(turn.next_question);
+        setIsSubmitting(false);
+        if (turn.next_question.text) {
+          handleSpeakQuestion(turn.next_question.text);
+        }
+        // Fired, not awaited: the analysis of the answer just stored runs while the candidate reads and
+        // drafts the next one.
+        void analyseRound(targetSessionId, false);
+        return true;
+      }
+
+      if (!turn.is_complete) {
+        setProcessingFault(
+          "Your answers are saved, but the next question did not arrive. Retry to continue this round."
+        );
+        return false;
+      }
+
+      const analysed = await analyseRound(targetSessionId, true);
+      if (!analysed) return false;
+      setCurrentQuestion(null);
+      await runFinalEvaluation(targetSessionId);
+      return true;
+    } finally {
+      processingInFlightRef.current = false;
+    }
+  };
+
   // Restore ongoing active session if navigating back from dashboard/progress
   useEffect(() => {
     let mounted = true;
-    if (sessionId && !currentQuestion) {
+    if (sessionId && !currentQuestion && reportPhase === "live") {
       setIsRestoringSession(true);
       getTechnicalSession(sessionId)
         .then((data) => {
           if (!mounted) return;
           if (data.is_complete) {
             // Already finished -> clean cache and redirect to report
-            localStorage.removeItem("speakflow_active_technical_session");
+            localStorage.removeItem(ACTIVE_SESSION_KEY);
             navigate(`/technical/report/${sessionId}`, { replace: true });
           } else if (data.current_question) {
             setCurrentQuestion(data.current_question);
@@ -138,12 +287,22 @@ export default function TechnicalStudio() {
             if (data.role) setRole(data.role);
             if (data.target_company) setTargetCompany(data.target_company);
             if (data.company_tier) setCompanyTier(data.company_tier);
-            localStorage.setItem("speakflow_active_technical_session", String(sessionId));
+            localStorage.setItem(ACTIVE_SESSION_KEY, String(sessionId));
+          } else {
+            // No live question and no report. Either the answers are all queued and the round was never
+            // scored, or a submit landed but its processing pass did not -- a lost response, a reload, or
+            // a server restart. Both are recovered by the same durable call: it clears any answer still
+            // marked pending, then either opens the next question or runs the one final evaluation.
+            const queued = Array.isArray(data.questions) ? data.questions.length : 0;
+            if (queued > 0) {
+              setQuestionCount(queued);
+              void advanceRound(sessionId);
+            }
           }
         })
         .catch((err) => {
           console.warn("Could not restore technical interview session:", err);
-          localStorage.removeItem("speakflow_active_technical_session");
+          localStorage.removeItem(ACTIVE_SESSION_KEY);
           setSessionId(null);
         })
         .finally(() => {
@@ -153,7 +312,7 @@ export default function TechnicalStudio() {
     return () => {
       mounted = false;
     };
-  }, [sessionId, currentQuestion, navigate]);
+  }, [sessionId, currentQuestion, navigate, reportPhase]);
 
   // Timer effect
   useEffect(() => {
@@ -174,62 +333,99 @@ export default function TechnicalStudio() {
       recognition.interimResults = true;
       recognition.lang = "en-US";
 
+      // An interim result is a cumulative snapshot of the segment still being spoken, so it replaces
+      // the pending caption instead of adding to it; only a final result contributes text to the
+      // answer that is evaluated and stored. Appending every result is what produced the
+      // repeated-prefix transcript ("The", "The things", "The things that"…) this guards against.
+      // An interim result is a cumulative snapshot of the segment still being spoken, so the aggregator
+      // replaces that pending segment instead of appending it; only a final result contributes text to
+      // the answer that is stored. Appending every result is what produced the repeated-prefix transcript.
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        // Two things can make this callback stale, and both are why it carries a token: the answer it
+        // belongs to has already been submitted, or the round has moved on to the next question while
+        // this engine session was still flushing results.
+        if (!capture.accepts(recognitionTokenRef.current)) return;
+        for (const segment of liveTranscript.handle(event)) {
+          setAnswerText((prev) => (prev ? `${prev} ${segment}` : segment));
         }
-        setAnswerText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setLiveCaption(liveTranscript.pending());
       };
 
-      recognition.onerror = () => setIsRecording(false);
-      recognition.onend = () => setIsRecording(false);
+      const endRecognitionSession = () => {
+        if (!capture.isCurrent(recognitionTokenRef.current)) return;
+        recognitionTokenRef.current = null;
+        capture.endRecording();
+        liveTranscript.reset();
+        setLiveCaption("");
+        setIsRecording(false);
+      };
+
+      recognition.onerror = endRecognitionSession;
+      recognition.onend = endRecognitionSession;
       recognitionRef.current = recognition;
     }
-  }, []);
+  }, [capture, liveTranscript]);
+
+  /** Stop whichever recording is open and hand back its complete audio, once its data has arrived. */
+  const finishTake = async (): Promise<Blob | null> => {
+    const take = takeRef.current;
+    if (!take) return null;
+    takeRef.current = null;
+    return take.stopAndCollect();
+  };
 
   const toggleRecording = async () => {
     if (isRecording) {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
+      const take = takeRef.current;
+      const blob = await finishTake();
+      // A take that finished after the answer was submitted is not this question's recording any more.
+      if (blob && take && capture.accepts(take.token)) setRecordedAudioBlob(blob);
+      capture.endRecording();
       setIsRecording(false);
-    } else {
-      setRecordedAudioBlob(null);
-      audioChunksRef.current = [];
+      return;
+    }
 
-      // Start MediaRecorder to capture audio stream for playback in report
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-          recorder.ondataavailable = (e) => {
-            if (e.data && e.data.size > 0) {
-              audioChunksRef.current.push(e.data);
-            }
-          };
-          recorder.onstop = () => {
-            const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-            setRecordedAudioBlob(blob);
-            stream.getTracks().forEach((track) => track.stop());
-          };
-          recorder.start();
-          mediaRecorderRef.current = recorder;
-        } catch (err) {
-          console.warn("Could not start MediaRecorder for audio playback:", err);
+    // The token is taken before anything is awaited: a submit that starts while the browser is still
+    // asking for the microphone closes the window, and this take is discarded instead of recorded into.
+    const token = capture.beginRecording();
+    if (token === null) return;
+
+    setRecordedAudioBlob(null);
+
+    let recorderReady = false;
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (!capture.accepts(token)) {
+          stream.getTracks().forEach((track) => track.stop());
+          capture.endRecording();
+          return;
         }
-      }
-
-      if (recognitionRef.current) {
-        recognitionRef.current.start();
-        setIsRecording(true);
-      } else {
-        alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
+        const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+        takeRef.current = startTake(recorder, token, () =>
+          stream.getTracks().forEach((track) => track.stop())
+        );
+        recorder.start();
+        recorderReady = true;
+      } catch (err) {
+        console.warn("Could not start MediaRecorder for audio playback:", err);
       }
     }
+
+    if (!recognitionRef.current) {
+      if (recorderReady) await finishTake();
+      capture.endRecording();
+      alert("Voice recognition is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    liveTranscript.reset();
+    recognitionTokenRef.current = token;
+    recognitionRef.current.start();
+    setIsRecording(true);
   };
 
   const handleSpeakQuestion = (text: string) => {
@@ -302,7 +498,17 @@ export default function TechnicalStudio() {
       setQuestionCount(0);
       setElapsedSeconds(0);
       setAnswerText("");
-      localStorage.setItem("speakflow_active_technical_session", String(res.session_id));
+      setLiveCaption("");
+      setReportPhase("live");
+      setProcessingFault(null);
+      setIsSubmitting(false);
+      liveTranscript.reset();
+      // A new round is a new capture window, so nothing an abandoned question left behind can still
+      // write into it.
+      takeRef.current = null;
+      recognitionTokenRef.current = null;
+      capture.nextQuestion();
+      localStorage.setItem(ACTIVE_SESSION_KEY, String(res.session_id));
       if (res.current_question?.text) {
         handleSpeakQuestion(res.current_question.text);
       }
@@ -318,40 +524,80 @@ export default function TechnicalStudio() {
       setErrorMsg("Please provide an answer before submitting.");
       return;
     }
-    if (isRecording && recognitionRef.current) {
+    if (capture.captureStatus === "submitting") return;
+
+    const question = currentQuestion;
+    const submittedAnswer = answerText.trim();
+
+    // Close the window before any await: the answer that is leaving is frozen as written above, the
+    // recording controls stop responding, and nothing a previous take queued can append to it.
+    capture.beginSubmit();
+    setIsSubmitting(true);
+    setErrorMsg(null);
+    setIsRecording(false);
+
+    if (recognitionRef.current) {
       recognitionRef.current.stop();
-      setIsRecording(false);
     }
+    // The recording is stopped and its final data is collected before the submit is sent, so the clip
+    // the server stores is the whole take rather than the part that happened to arrive so far.
+    const collected = await finishTake();
     if (isSpeaking) {
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     }
 
-    setIsSubmitting(true);
-    setErrorMsg(null);
-
+    let answerStored = false;
     try {
-      const res = await submitTechnicalAnswer(sessionId, answerText.trim(), recordedAudioBlob);
+      const res = await submitTechnicalAnswer(
+        sessionId,
+        submittedAnswer,
+        collected ?? recordedAudioBlob,
+        question?.id ?? null
+      );
 
-      if (res.is_complete && res.report) {
-        // Complete -> remove cached active session and go to report
-        localStorage.removeItem("speakflow_active_technical_session");
-        navigate(`/technical/report/${sessionId}`);
-      } else if (res.next_question) {
-        setCurrentQuestion(res.next_question);
-        setQuestionCount(res.question_count);
-        setAnswerText("");
-        setRecordedAudioBlob(null);
-        if (res.next_question.text) {
-          handleSpeakQuestion(res.next_question.text);
-        }
-      }
+      // From here the answer is on the server's record. The submit window stays shut through the
+      // processing pass, so a slow or failed pass can only be retried -- never submitted a second time.
+      answerStored = true;
+
+      setAnswerText("");
+      setLiveCaption("");
+      setRecordedAudioBlob(null);
+      liveTranscript.reset();
+      recognitionTokenRef.current = null;
+      setQuestionCount(res.question_count);
+
+      // One call covers both halves of what the submit deferred: it asks the generator for the next
+      // question without waiting on the recording analysis, and when the round is full it waits for that
+      // analysis and then runs the single final evaluation.
+      await advanceRound(sessionId);
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.detail || "Failed to evaluate answer.");
+      capture.abortSubmit();
+      setErrorMsg(err?.response?.data?.detail || "Failed to save the answer. Retry to submit it again.");
     } finally {
-      setIsSubmitting(false);
+      if (!answerStored) setIsSubmitting(false);
     }
   };
+
+  // Speech recognition ends with the component: an engine left running would fire into a screen that
+  // no longer exists, and a recorder nobody stopped keeps the microphone indicator lit.
+  useEffect(
+    () => () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.onresult = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onend = null;
+        try {
+          recognitionRef.current.abort();
+        } catch {
+          /* already stopped */
+        }
+      }
+      void takeRef.current?.stopAndCollect();
+      takeRef.current = null;
+    },
+    []
+  );
 
   const formatTimer = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -755,6 +1001,47 @@ export default function TechnicalStudio() {
   }
 
   // -------------------------------------------------------------------------
+  // RENDER: END OF ROUND — THE ONE EVALUATION PASS
+  // -------------------------------------------------------------------------
+  if (sessionId && reportPhase !== "live") {
+    const compiling = reportPhase === "compiling";
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center min-h-[70vh] gap-5 px-4">
+        <div className="relative w-full max-w-xl p-8 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col items-center gap-4 text-center">
+          {compiling ? (
+            <div className="w-12 h-12 rounded-full border-2 border-secondary border-t-transparent animate-spin" />
+          ) : (
+            <span className="material-symbols-outlined text-[40px] text-error">cloud_off</span>
+          )}
+          <h2 className="font-headline-md text-xl font-bold text-on-surface">
+            {compiling ? "Scoring your complete round" : "The report could not be generated"}
+          </h2>
+          <p className="font-body-md text-sm text-on-surface-variant leading-relaxed">
+            {compiling
+              ? `All ${questionCount} answers are saved. They are evaluated once, as one interview, and the report opens when it is ready.`
+              : "Every answer is saved and this round is still open. Nothing was scored with a stand-in number: retry re-runs any recording analysis that did not finish, then the report."}
+          </p>
+          {errorMsg && (
+            <div className="w-full p-3 rounded-xl bg-error-container/20 border border-error/30 text-error text-xs text-left">
+              {errorMsg}
+            </div>
+          )}
+          {!compiling && (
+            <button
+              type="button"
+              onClick={() => void advanceRound(sessionId)}
+              className="px-6 py-2.5 rounded-xl bg-secondary hover:bg-secondary/90 text-on-secondary font-headline-sm text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Retry final evaluation</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------------------
   // RENDER: LIVE INTERVIEW STUDIO
   // -------------------------------------------------------------------------
   return (
@@ -806,6 +1093,27 @@ export default function TechnicalStudio() {
         </div>
       )}
 
+      {/* The answer is stored; only its deferred analysis failed. Retrying that is the whole fix, and the
+          submit and mic stay locked while it is outstanding so the answer cannot be queued twice. */}
+      {processingFault && (
+        <div className="p-3.5 rounded-xl bg-error-container/20 border border-error/30 text-error text-xs flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">sound_detection</span>
+            <span>{processingFault}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (sessionId) void advanceRound(sessionId);
+            }}
+            className="self-start px-4 py-2 rounded-lg bg-error/90 hover:bg-error text-on-error font-headline-sm text-[11px] font-bold flex items-center gap-2 transition-colors cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[14px]">refresh</span>
+            <span>Retry recording analysis</span>
+          </button>
+        </div>
+      )}
+
       {/* Main Question Bento Box */}
       <div className="p-6 sm:p-8 rounded-xl bg-surface-container-low border border-outline-variant/30 shadow-xl flex flex-col gap-5 relative overflow-hidden">
         <div className="flex items-center justify-between">
@@ -845,10 +1153,18 @@ export default function TechnicalStudio() {
             <button
               type="button"
               onClick={toggleRecording}
+              disabled={isSubmitting}
+              title={
+                isSubmitting
+                  ? "This answer is being saved; the microphone reopens with the next question."
+                  : undefined
+              }
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm ${
-                isRecording
-                  ? "bg-error text-white animate-pulse"
-                  : "bg-surface-container hover:bg-surface-container-high text-on-surface"
+                isSubmitting
+                  ? "bg-surface-container-high text-outline/50 cursor-not-allowed"
+                  : isRecording
+                    ? "bg-error text-white animate-pulse"
+                    : "bg-surface-container hover:bg-surface-container-high text-on-surface"
               }`}
             >
               <span className="material-symbols-outlined text-[16px]">
@@ -867,9 +1183,21 @@ export default function TechnicalStudio() {
           rows={6}
           value={answerText}
           onChange={(e) => setAnswerText(e.target.value)}
+          readOnly={isSubmitting}
           placeholder="Articulate your thought process clearly. Structure your reasoning, state architectural trade-offs, and reference concrete engineering milestones..."
-          className="w-full p-4 rounded-xl bg-surface-container border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-secondary transition-colors resize-y leading-relaxed font-body-md"
+          className="w-full p-4 rounded-xl bg-surface-container border border-outline-variant/40 text-on-surface text-sm focus:outline-none focus:border-secondary transition-colors resize-y leading-relaxed font-body-md disabled:opacity-60"
         />
+
+        {liveCaption && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="text-xs text-outline italic pt-1"
+            title="Still being recognised. This line joins your answer when the engine finalizes it."
+          >
+            {liveCaption}
+          </p>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <span className="text-xs text-outline font-label-numeric-sm">
@@ -885,7 +1213,11 @@ export default function TechnicalStudio() {
             {isSubmitting ? (
               <>
                 <span className="material-symbols-outlined animate-spin text-[16px]">refresh</span>
-                <span>Synthesizing Next Question...</span>
+                <span>
+                  {questionCount + 1 >= maxQuestions
+                    ? "Saving final answer..."
+                    : "Synthesizing Next Question..."}
+                </span>
               </>
             ) : (
               <>

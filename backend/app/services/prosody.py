@@ -12,10 +12,14 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
+from app.services.audio_pcm import decode_pcm16_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +29,15 @@ try:
     _AV_AVAILABLE = True
 except Exception:
     av = None
+
+_PARSELMOUTH_AVAILABLE = False
+try:
+    import parselmouth
+    from parselmouth.praat import call
+
+    _PARSELMOUTH_AVAILABLE = True
+except ImportError:
+    logger.warning("praat-parselmouth not installed. Prosody fallback active.")
 
 
 def is_prosody_available() -> bool:
@@ -298,3 +311,176 @@ def _deterministic_prosody_fallback(
         "tone_verdict": "Authoritative & Resonant" if final_conf >= 80 else "Measured & Structured",
         "prosody_feedback": "Acoustic resonance maintained with steady vocal projection across sentences.",
     }
+
+
+def empty_prosody() -> Dict[str, Any]:
+    return {
+        "pitch_mean_hz": 0.0,
+        "pitch_std_hz": 0.0,
+        "is_monotone": False,
+        "dynamic_range_semitones": 0.0,
+        "vocal_jitter_percent": 0.0,
+        "vocal_shimmer_percent": 0.0,
+        "hnr_db": 0.0,
+        "vocal_tremor_flag": False,
+        "delivery_clarity": "Clear",
+    }
+
+
+def _decode_prosody_audio(
+    audio_source: Union[str, Path, bytes, np.ndarray],
+) -> Optional[Tuple[np.ndarray, int]]:
+    path: Optional[str] = None
+    tmp_path: Optional[str] = None
+
+    try:
+        if isinstance(audio_source, np.ndarray):
+            waveform = np.asarray(audio_source, dtype=np.float32).reshape(-1)
+            if waveform.size == 0:
+                return None
+            return waveform, 16000
+        if isinstance(audio_source, (str, Path)):
+            path = str(audio_source)
+        elif isinstance(audio_source, bytes):
+            pcm = decode_pcm16_chunk(audio_source)
+            if pcm is not None:
+                return pcm, 16000
+            with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+                tmp.write(audio_source)
+                tmp_path = tmp.name
+            path = tmp_path
+        else:
+            return None
+
+        if _AV_AVAILABLE and av is not None:
+            try:
+                with av.open(path) as container:
+                    stream = container.streams.audio[0]
+                    resampler = av.AudioResampler(
+                        format="flt", layout="mono", rate=16000
+                    )
+                    frames = []
+                    for frame in container.decode(stream):
+                        for resampled in resampler.resample(frame):
+                            frames.append(resampled.to_ndarray().reshape(-1))
+                if frames:
+                    waveform = np.concatenate(frames).astype(np.float32, copy=False)
+                    return waveform, 16000
+            except Exception:
+                pass
+
+        try:
+            import soundfile as sf
+
+            data, sr = sf.read(path, always_2d=False)
+            waveform = np.asarray(data, dtype=np.float32)
+            if waveform.ndim > 1:
+                waveform = waveform.mean(axis=1)
+            return waveform.reshape(-1), int(sr)
+        except Exception:
+            pass
+
+        return None
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def _to_parselmouth_sound(audio_source: Union[str, Path, bytes, np.ndarray]):
+    decoded = _decode_prosody_audio(audio_source)
+    if decoded is not None:
+        waveform, sr = decoded
+        waveform = np.nan_to_num(waveform, nan=0.0, posinf=0.0, neginf=0.0)
+        if waveform.size == 0:
+            return None
+        return parselmouth.Sound(waveform.reshape(1, -1), sampling_frequency=sr)
+
+    if isinstance(audio_source, (str, Path)):
+        try:
+            return parselmouth.Sound(str(audio_source))
+        except Exception:
+            return None
+
+    return None
+
+
+def _finite(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if np.isfinite(number) else default
+
+
+def extract_prosody_features(
+    audio_source: Union[str, Path, bytes, np.ndarray],
+) -> Dict[str, Any]:
+    """Extract pitch variation, monotone flags, and vocal cord tension."""
+    if not _PARSELMOUTH_AVAILABLE:
+        return empty_prosody()
+
+    try:
+        sound = _to_parselmouth_sound(audio_source)
+        if sound is None:
+            return empty_prosody()
+
+        pitch = sound.to_pitch(time_step=0.01, pitch_floor=75, pitch_ceiling=500)
+        f0_values = pitch.selected_array["frequency"]
+        voiced = f0_values[f0_values > 0]
+
+        if len(voiced) < 5:
+            return empty_prosody()
+
+        pitch_mean = _finite(np.mean(voiced))
+        pitch_std = _finite(np.std(voiced))
+
+        p_min = _finite(np.percentile(voiced, 5))
+        p_max = _finite(np.percentile(voiced, 95))
+        semitone_range = (
+            12.0 * float(np.log2(p_max / p_min)) if p_min > 0 and p_max > 0 else 0.0
+        )
+
+        is_monotone = bool(pitch_std < 16.0 or semitone_range < 3.0)
+
+        point_process = call(sound, "To PointProcess (periodic, cc)", 75, 500)
+        local_jitter = _finite(
+            call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+        ) * 100.0
+        local_shimmer = _finite(
+            call(
+                [sound, point_process],
+                "Get shimmer (local)",
+                0,
+                0,
+                0.0001,
+                0.02,
+                1.3,
+                1.6,
+            )
+        ) * 100.0
+
+        harmonicity = sound.to_harmonicity()
+        hnr = _finite(call(harmonicity, "Get mean", 0, 0))
+
+        vocal_tremor_flag = bool(local_jitter > 1.2 or local_shimmer > 4.5)
+        delivery_clarity = (
+            "Crisp" if hnr >= 15.0 else ("Breathy" if hnr >= 10.0 else "Strained")
+        )
+
+        return {
+            "pitch_mean_hz": round(pitch_mean, 1),
+            "pitch_std_hz": round(pitch_std, 1),
+            "dynamic_range_semitones": round(_finite(semitone_range), 1),
+            "is_monotone": is_monotone,
+            "vocal_jitter_percent": round(_finite(local_jitter), 2),
+            "vocal_shimmer_percent": round(_finite(local_shimmer), 2),
+            "hnr_db": round(hnr, 1),
+            "vocal_tremor_flag": vocal_tremor_flag,
+            "delivery_clarity": delivery_clarity,
+        }
+    except Exception as exc:
+        logger.warning("Prosody extraction encountered an issue: %s", exc)
+        return empty_prosody()

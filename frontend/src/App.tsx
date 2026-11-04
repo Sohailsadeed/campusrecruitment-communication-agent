@@ -11,6 +11,7 @@ import GuesstimateStudio from "./pages/guesstimate/GuesstimateStudio";
 import GuesstimateReport from "./pages/guesstimate/GuesstimateReport";
 import HRStudio from "./pages/hr/HRStudio";
 import HRReport from "./pages/hr/HRReport";
+import HRLiveRoom from "./pages/hr/HRLiveRoom";
 import AuthPage from "./pages/AuthPage";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthModal from "./components/Auth/AuthModal";
@@ -58,6 +59,7 @@ export default function App() {
           <Route path="/hr" element={<HRStudio />} />
           <Route path="/hr/:sessionId" element={<HRStudio />} />
           <Route path="/hr/report/:sessionId" element={<HRReport />} />
+          <Route path="/hr/live/:sessionId" element={<HRLiveRoom />} />
           <Route path="/analysis/:sessionId" element={<AnalysisPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/settings" element={<SettingsPage />} />

@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link } from "react-router-dom";
+import { apiClient } from "../../api/client";
+import {
+  attemptCleanup,
+  describeAudioError,
+  fetchProtectedAudio,
+  isStaleResponse,
+  playbackReleaseSteps,
+  runSequential,
+  type NamedStep,
+  type PlaybackRecord,
+} from "../../api/audioBlob";
 import type { SessionDetail } from "../../types";
+import VocalDeliveryCard from "../Interview/VocalDeliveryCard";
 
 interface AnalysisResultsProps {
   session: SessionDetail;
@@ -14,6 +26,13 @@ function formatAudioTime(value: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** A teardown failure is reported, not swallowed: the object URL may still be live. */
+function reportTeardownFailures(failures: string[]): void {
+  if (failures.length > 0) {
+    console.error("AnalysisResults: recording teardown failed", failures);
+  }
+}
+
 export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const [rewriteIdx, setRewriteIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -23,6 +42,8 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
   const [audioLoading, setAudioLoading] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
+  const clipAttempt = useRef(0);
 
   const report = session.report;
   const audioUrl = session.audio_url || null;
@@ -48,6 +69,62 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
       audioRef.current?.pause();
     };
   }, [session.id, audioUrl]);
+
+  // AUTH-C/D-E: the clip is fetched with the bearer token and played from an object URL. A media
+  // element cannot authenticate, so `src` is written only here, imperatively, and never by React.
+  useEffect(() => {
+    if (!audioUrl) return;
+
+    const attempt = (clipAttempt.current += 1);
+    const ctrl = new AbortController();
+    let objectUrl = "";
+
+    const release = () => {
+      ctrl.abort();
+      if (!objectUrl) return;
+      const url = objectUrl;
+      objectUrl = "";
+      const el = audioRef.current;
+      const steps: NamedStep[] = el
+        ? playbackReleaseSteps({ el, objectUrl: url } as PlaybackRecord)
+        : [["revokeObjectURL", () => URL.revokeObjectURL(url)]];
+      reportTeardownFailures(attemptCleanup(steps));
+    };
+
+    setAudioError(null);
+    setAudioLoading(true);
+
+    fetchProtectedAudio(apiClient, audioUrl, ctrl.signal)
+      .then((blob) => {
+        // Currency is checked before the object URL exists, so a stale settle can never install a
+        // recording over a newer one, nor touch state on an unmounted view.
+        if (isStaleResponse(attempt, clipAttempt.current, ctrl.signal.aborted)) return;
+        const el = audioRef.current;
+        if (!el) return;
+        objectUrl = URL.createObjectURL(blob);
+        const outcome = runSequential([
+          ["setAttribute", () => el.setAttribute("src", objectUrl)],
+          ["load", () => el.load()],
+        ]);
+        if (!outcome.ok) {
+          release();
+          setAudioError(`The original recording could not be loaded from the server. (${outcome.step})`);
+          setAudioReady(false);
+          setAudioLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (isStaleResponse(attempt, clipAttempt.current, ctrl.signal.aborted)) return;
+        setAudioError(describeAudioError(err));
+        setAudioReady(false);
+        setAudioLoading(false);
+      });
+
+    return () => {
+      clipAttempt.current += 1; // any in-flight settle for this attempt becomes stale on the spot
+      release();
+    };
+  }, [session.id, audioUrl, retryToken]);
 
   const handleAudioError = () => {
     const code = audioRef.current?.error?.code;
@@ -427,7 +504,6 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
                 <div className="rounded-lg border border-outline-variant/30 bg-surface-container p-3">
                   <audio
                     ref={audioRef}
-                    src={audioUrl}
                     preload="metadata"
                     className="hidden"
                     onLoadStart={() => setAudioLoading(true)}
@@ -486,13 +562,14 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            const audio = audioRef.current;
                             setAudioError(null);
                             setAudioReady(false);
                             setAudioLoading(true);
                             setAudioCurrentTime(0);
                             setAudioDuration(0);
-                            audio?.load();
+                            // The clip is our resource to fetch, so retry re-dispatches the
+                            // authenticated request rather than reloading a source React no longer owns.
+                            setRetryToken((token) => token + 1);
                           }}
                           className="mt-1 w-fit rounded border border-outline-variant/40 px-2 py-1 text-[10px] font-semibold text-on-surface hover:bg-surface-container-high"
                         >
@@ -572,6 +649,13 @@ export default function AnalysisResults({ session }: AnalysisResultsProps) {
           </div>
         </div>
       </div>
+
+      {report?.vocal_delivery && (
+        <VocalDeliveryCard
+          vocalDelivery={report.vocal_delivery}
+          accent="secondary"
+        />
+      )}
 
       {/* Core Grid: Competency Radar & Multi-Axis Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

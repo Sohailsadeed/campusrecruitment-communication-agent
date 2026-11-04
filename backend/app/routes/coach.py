@@ -15,7 +15,7 @@ from app.database.engine import get_db
 from app.models.coach import CurriculumPlan
 from app.models.session import Session as SessionModel
 from app.models.user import User
-from app.routes.sessions import _get_optional_user
+from app.routes.auth import get_current_user
 from app.services.coach.curriculum_agent import generate_curriculum_plan
 
 logger = logging.getLogger("speakflow.coach.routes")
@@ -36,22 +36,18 @@ class CompleteDayRequest(BaseModel):
     notes: Optional[str] = None
 
 
-def _resolve_user_id(current_user: Optional[User]) -> int:
-    return current_user.id if current_user else 1
-
-
 @router.get("/active-plan")
 def get_active_plan(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Retrieve the current active 7-day curriculum plan for the candidate."""
-    user_id = _resolve_user_id(current_user)
+    user_id = current_user.id
     plan = (
         db.scalars(
             select(CurriculumPlan)
             .where(
-                (CurriculumPlan.user_id == user_id) | (CurriculumPlan.user_id.is_(None)),
+                CurriculumPlan.user_id == user_id,
                 CurriculumPlan.status == "active",
             )
             .order_by(desc(CurriculumPlan.created_at))
@@ -86,17 +82,17 @@ def get_active_plan(
 async def create_plan(
     payload: GeneratePlanRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Invoke the LangGraph Curriculum Agent to synthesize a personalized roadmap."""
-    user_id = _resolve_user_id(current_user)
+    user_id = current_user.id
 
     # Check for existing active plan
     existing_plan = (
         db.scalars(
             select(CurriculumPlan)
             .where(
-                (CurriculumPlan.user_id == user_id) | (CurriculumPlan.user_id.is_(None)),
+                CurriculumPlan.user_id == user_id,
                 CurriculumPlan.status == "active",
             )
             .order_by(desc(CurriculumPlan.created_at))
@@ -183,13 +179,13 @@ async def create_plan(
 def complete_day(
     payload: CompleteDayRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Mark a curriculum day as completed and unlock the next progressive drill."""
-    user_id = _resolve_user_id(current_user)
+    user_id = current_user.id
     plan = db.get(CurriculumPlan, payload.plan_id)
 
-    if not plan or (plan.user_id and plan.user_id != user_id and user_id != 1):
+    if plan is None or plan.user_id != user_id:
         raise HTTPException(status_code=404, detail="Curriculum plan not found")
 
     days: List[Dict[str, Any]] = list(plan.days)
@@ -236,15 +232,15 @@ def complete_day(
 @router.post("/auto-sync")
 def auto_sync_recent_drills(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Automatically check recent completed sessions and mark corresponding curriculum days as done."""
-    user_id = _resolve_user_id(current_user)
+    user_id = current_user.id
     plan = (
         db.scalars(
             select(CurriculumPlan)
             .where(
-                (CurriculumPlan.user_id == user_id) | (CurriculumPlan.user_id.is_(None)),
+                CurriculumPlan.user_id == user_id,
                 CurriculumPlan.status == "active",
             )
             .order_by(desc(CurriculumPlan.created_at))
@@ -262,13 +258,11 @@ def auto_sync_recent_drills(
 
     target_round = current_day.get("round_type")
     # Query latest session in that round
-    user_filter = (
-        (SessionModel.user_id == user_id)
-        if user_id > 1
-        else ((SessionModel.user_id == 1) | (SessionModel.user_id.is_(None)))
+    query = (
+        select(SessionModel)
+        .where(SessionModel.user_id == user_id)
+        .order_by(desc(SessionModel.created_at))
     )
-
-    query = select(SessionModel).where(user_filter).order_by(desc(SessionModel.created_at))
     if target_round in ("jam", "general"):
         query = query.where(
             (SessionModel.round_type.is_(None))

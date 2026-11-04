@@ -1,7 +1,8 @@
-"""Cross-session memory using Mem0 with ChromaDB and OpenRouter/HuggingFace."""
+"""Cross-session memory using Mem0 with ChromaDB and the configured LLM provider."""
 import logging
 from typing import List, Optional
 
+from app.services import llm_client
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -9,24 +10,34 @@ logger = logging.getLogger(__name__)
 _memory = None
 
 
+def _llm_config() -> dict:
+    """The Mem0 chat model, from the same provider decision every other evaluator uses.
+
+    Mem0 speaks to both providers over the OpenAI-compatible surface, so only the endpoint, model and
+    credential differ. Local by default: a present OpenRouter credential must not make cross-session
+    memory a remote call. The placeholder for the local endpoint is not a secret -- Ollama ignores it.
+    """
+    target = settings.resolve_llm_target()
+    if target["provider"] == "openrouter":
+        if not target["credential_present"]:
+            raise RuntimeError(llm_client.MISSING_CREDENTIAL)
+        return {"provider": "openai",
+                "config": {"model": target["model"], "api_key": settings.openrouter_api_key,
+                           "openai_base_url": target["base_url"]}}
+    return {"provider": "openai",
+            "config": {"model": target["model"], "api_key": "sk-dummy-local",
+                       "openai_base_url": f"{target['base_url'].rstrip('/')}/v1"}}
+
+
 def _get_memory():
-    """Initialize Mem0 with OpenRouter Nemotron / Ollama and local HuggingFace embeddings."""
+    """Initialize Mem0 with the configured LLM provider and local HuggingFace embeddings."""
     global _memory
     if _memory is None:
         try:
             from mem0 import Memory
 
-            llm_config = {
-                "provider": "openai",
-                "config": {
-                    "model": settings.chat_model,
-                    "api_key": settings.openrouter_api_key or "sk-dummy-local",
-                    "openai_base_url": settings.openrouter_base_url,
-                },
-            }
-
             config = {
-                "llm": llm_config,
+                "llm": _llm_config(),
                 "embedder": {
                     "provider": "huggingface",
                     "config": {

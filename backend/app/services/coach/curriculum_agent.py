@@ -44,17 +44,11 @@ class CurriculumState(TypedDict):
 # Helper: Extract historical telemetry across all 4 rounds
 # ---------------------------------------------------------------------------
 def extract_candidate_history(user_id: int, db: Session) -> Dict[str, Any]:
-    """Extract and aggregate cross-round metrics from database sessions."""
-    user_filter = (
-        (SessionModel.user_id == user_id)
-        if user_id > 1
-        else ((SessionModel.user_id == 1) | (SessionModel.user_id.is_(None)))
-    )
-
+    """Extract and aggregate cross-round metrics from database sessions owned by user_id."""
     all_sessions = (
         db.scalars(
             select(SessionModel)
-            .where(user_filter)
+            .where(SessionModel.user_id == user_id)
             .order_by(SessionModel.created_at.asc())
         )
         .all()
@@ -246,12 +240,13 @@ def extract_candidate_history(user_id: int, db: Session) -> Dict[str, Any]:
 # LangGraph Nodes
 # ---------------------------------------------------------------------------
 async def audit_history_node(state: CurriculumState) -> Dict[str, Any]:
-    """Node 1: Extract and aggregate cross-round telemetry from database sessions."""
-    logger.info("LangGraph Node: audit_history for user %s", state.get("user_id"))
+    """Node 1: Extract and aggregate cross-round telemetry from the caller's own sessions."""
+    user_id = state["user_id"]
+    logger.info("LangGraph Node: audit_history for user %s", user_id)
     history = state.get("history_summary")
     if not history or not history.get("jam"):
         with SessionLocal() as db:
-            history = extract_candidate_history(state.get("user_id", 1), db)
+            history = extract_candidate_history(user_id, db)
     return {"history_summary": history}
 
 
@@ -697,11 +692,15 @@ curriculum_graph = _build_curriculum_graph()
 # Public Execution API
 # ---------------------------------------------------------------------------
 async def generate_curriculum_plan(
-    user_id: int = 1,
+    user_id: int,
     target_role: str = "General Placement",
     history_summary: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute the LangGraph state machine to generate a personalized 7-day roadmap."""
+    """Execute the LangGraph state machine to generate a personalized 7-day roadmap.
+
+    user_id is required: the agent reads a candidate's telemetry, so an absent identity must be a
+    programming error rather than a silent borrow of the lowest-numbered account.
+    """
     initial_state: CurriculumState = {
         "user_id": user_id,
         "target_role": target_role,

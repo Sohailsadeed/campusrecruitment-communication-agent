@@ -44,6 +44,15 @@ export default function VocalDeliveryCard({
   const nervousness = Math.round(summary.nervousness_score ?? 0);
   const composure = Math.round(summary.composure_score ?? 0);
   const timeline = vocalDelivery?.timeline ?? [];
+  const prosody = vocalDelivery?.prosody;
+  const hasVoice = (prosody?.pitch_mean_hz ?? 0) > 0;
+  const pitchStd = prosody?.pitch_std_hz ?? 0;
+  const semitoneRange = prosody?.dynamic_range_semitones ?? 0;
+  const jitter = prosody?.vocal_jitter_percent ?? 0;
+  const hnr = prosody?.hnr_db ?? 0;
+  const isMonotone = Boolean(prosody?.is_monotone);
+  const hasTremor = Boolean(prosody?.vocal_tremor_flag);
+  const clarity = prosody?.delivery_clarity || "Clear";
 
   const sampledTimeline =
     timeline.length > 48
@@ -153,6 +162,148 @@ export default function VocalDeliveryCard({
           </div>
         ))}
       </div>
+
+      {prosody && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="font-label-caps text-[10px] uppercase tracking-wider text-outline font-semibold">
+              Vocal Dynamics &amp; Control
+            </span>
+            <span className="text-[10px] text-outline">
+              Praat acoustic telemetry
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div
+              className={`rounded-xl border p-4 flex flex-col gap-1.5 ${
+                isMonotone
+                  ? "border-amber-500/30 bg-amber-500/10"
+                  : "border-emerald-500/30 bg-emerald-500/10"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-[10px] uppercase tracking-wider text-outline font-semibold">
+                  Pitch Modulation
+                </span>
+                <span
+                  className={`material-symbols-outlined text-[18px] ${
+                    isMonotone ? "text-amber-400" : "text-emerald-400"
+                  }`}
+                >
+                  ssid_chart
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={`font-label-numeric text-2xl font-bold ${
+                    isMonotone ? "text-amber-400" : "text-emerald-400"
+                  }`}
+                >
+                  {pitchStd}
+                </span>
+                <span className="text-xs font-semibold text-outline">Hz</span>
+              </div>
+              <span className="text-[11px] text-on-surface-variant font-medium">
+                {!hasVoice
+                  ? "No voiced audio detected"
+                  : isMonotone
+                  ? "Monotone Warning"
+                  : "Dynamic & Engaging"}
+              </span>
+              <span className="text-[10px] text-outline">
+                Range {semitoneRange} semitones
+              </span>
+            </div>
+
+            <div
+              className={`rounded-xl border p-4 flex flex-col gap-1.5 ${
+                hasTremor
+                  ? "border-rose-500/30 bg-rose-500/10"
+                  : "border-emerald-500/30 bg-emerald-500/10"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-[10px] uppercase tracking-wider text-outline font-semibold">
+                  Voice Stability
+                </span>
+                <span
+                  className={`material-symbols-outlined text-[18px] ${
+                    hasTremor ? "text-rose-400" : "text-emerald-400"
+                  }`}
+                >
+                  waves
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={`font-label-numeric text-2xl font-bold ${
+                    hasTremor ? "text-rose-400" : "text-emerald-400"
+                  }`}
+                >
+                  {jitter}
+                </span>
+                <span className="text-xs font-semibold text-outline">%</span>
+              </div>
+              <span className="text-[11px] text-on-surface-variant font-medium">
+                {!hasVoice
+                  ? "No voiced audio detected"
+                  : hasTremor
+                  ? "Vocal Cord Tension"
+                  : "Controlled Breath"}
+              </span>
+              <span className="text-[10px] text-outline">Jitter (local)</span>
+            </div>
+
+            <div
+              className={`rounded-xl border p-4 flex flex-col gap-1.5 ${
+                hnr >= 15
+                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  : hnr >= 10
+                  ? "border-amber-500/30 bg-amber-500/10"
+                  : "border-rose-500/30 bg-rose-500/10"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-[10px] uppercase tracking-wider text-outline font-semibold">
+                  Clarity
+                </span>
+                <span
+                  className={`material-symbols-outlined text-[18px] ${
+                    hnr >= 15
+                      ? "text-emerald-400"
+                      : hnr >= 10
+                      ? "text-amber-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  graphic_eq
+                </span>
+              </div>
+              <div className="flex items-baseline gap-1">
+                <span
+                  className={`font-label-numeric text-2xl font-bold ${
+                    hnr >= 15
+                      ? "text-emerald-400"
+                      : hnr >= 10
+                      ? "text-amber-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  {hnr}
+                </span>
+                <span className="text-xs font-semibold text-outline">dB</span>
+              </div>
+              <span className="text-[11px] text-on-surface-variant font-medium">
+                {!hasVoice ? "No voiced audio detected" : `${clarity} Articulation`}
+              </span>
+              <span className="text-[10px] text-outline">
+                Harmonics-to-noise ratio
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {sampledTimeline.length > 0 && (
         <div className="flex flex-col gap-2">

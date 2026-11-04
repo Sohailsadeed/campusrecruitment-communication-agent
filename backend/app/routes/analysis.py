@@ -14,15 +14,18 @@ logger = logging.getLogger(__name__)
 from app.database.engine import get_db
 from app.models.feedback import AIFeedback
 from app.models.session import (
-    Session as SessionModel,
     SessionAnalysis,
     Transcription,
 )
+from app.models.user import User
+from app.routes.auth import get_current_user
 from app.schemas.session import SessionAnalysisOut, SessionDetailOut, TranscriptionOut
 from app.services.analysis import analyze_transcription
+from app.services.emotion import analyze_speech_emotion
 from app.services.feedback import generate_feedback
-from app.services.prosody import analyze_audio_prosody
-from app.services.session_media import get_session_audio_url
+from app.services.prosody import analyze_audio_prosody, extract_prosody_features
+from app.services.session_media import get_session_audio_media_type, get_session_audio_url
+from app.services.session_ownership import owned_session
 from app.services.tracking import analyze_video
 from app.services.transcription import transcribe_audio
 from app.services.tts import synthesize_feedback_audio
@@ -86,11 +89,13 @@ def _extract_filler_timeline(words: list, filler_dict: dict) -> list[dict]:
 def analyze_session(
     session_id: int,
     request: Request,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> SessionDetailOut:
-    session = db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    # AUTH-D: ownership is proven here, deliberately outside the broad `try` below. A refusal must
+    # surface as the refusal it is, not be caught, logged as an analysis failure, flip the session
+    # to "failed" and answer 500.
+    session = owned_session(db, session_id, current_user)
 
     session.status = "processing"
     db.commit()
@@ -145,6 +150,25 @@ def analyze_session(
         )
 
         combined = {**metrics, **video_metrics, **pause_data, "prosody": prosody_metrics}
+
+        # 3c. Vocal delivery telemetry (audEERING emotion + Praat prosody)
+        vocal_delivery = {}
+        if audio_path is not None and audio_path.exists():
+            try:
+                vocal_delivery = analyze_speech_emotion(audio_path)
+                prosody = extract_prosody_features(audio_path)
+                if isinstance(vocal_delivery, dict):
+                    if prosody.get("pitch_mean_hz") or not vocal_delivery.get("prosody"):
+                        vocal_delivery["prosody"] = prosody
+                else:
+                    vocal_delivery = {}
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Vocal delivery analysis failed for session %s: %s",
+                    session_id,
+                    exc,
+                )
+                vocal_delivery = {}
 
         filler_payload = {
             **combined["filler_words_list"],
@@ -251,6 +275,7 @@ def analyze_session(
             "rewrites": feedback_payload.get("rewrites", []),
             "competencies": feedback_payload.get("competencies", {}),
             "prosody": prosody_metrics,
+            "vocal_delivery": vocal_delivery,
             "mastery_points": feedback_payload.get("mastery_points", []),
             "curated_drills": feedback_payload.get("curated_drills", []),
             "cadence_sparkline": cadence_sparkline,
@@ -288,19 +313,25 @@ def analyze_session(
 
 
 @router.get("/{session_id}/analysis", response_model=SessionAnalysisOut)
-def get_analysis(session_id: int, db: Session = Depends(get_db)) -> SessionAnalysisOut:
-    session = db.get(SessionModel, session_id)
-    if not session or not session.analysis:
+def get_analysis(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> SessionAnalysisOut:
+    session = owned_session(db, session_id, current_user)
+    if not session.analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
     return SessionAnalysisOut.model_validate(session.analysis)
 
 
 @router.get("/{session_id}/transcription", response_model=TranscriptionOut)
 def get_transcription(
-    session_id: int, db: Session = Depends(get_db)
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> TranscriptionOut:
-    session = db.get(SessionModel, session_id)
-    if not session or not session.transcription:
+    session = owned_session(db, session_id, current_user)
+    if not session.transcription:
         raise HTTPException(status_code=404, detail="Transcription not found")
     return TranscriptionOut.model_validate(session.transcription)
 
@@ -308,12 +339,11 @@ def get_transcription(
 @router.get("/{session_id}/tts")
 async def get_session_tts(
     session_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Synthesize and stream executive coach feedback audio."""
-    session = db.get(SessionModel, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
+    session = owned_session(db, session_id, current_user)
 
     report = session.report or {}
     text_to_speak = report.get("feedback_content")
@@ -329,9 +359,11 @@ async def get_session_tts(
     if not audio_path or not audio_path.exists():
         raise HTTPException(status_code=503, detail="TTS synthesis currently unavailable")
 
+    # The container is whatever the configured provider produced — WAV from a local engine, MP3 from
+    # the remote one — so the declared type and the download name come from the file itself.
     return FileResponse(
         path=str(audio_path),
-        media_type="audio/mpeg",
-        filename=f"session_{session_id}_coach.mp3",
+        media_type=get_session_audio_media_type(audio_path),
+        filename=f"session_{session_id}_coach{audio_path.suffix.lower()}",
     )
 

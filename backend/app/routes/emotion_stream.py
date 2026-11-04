@@ -3,21 +3,35 @@
 import asyncio
 import json
 import logging
+import time
+from collections import deque
 from typing import Optional
 
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.database.engine import SessionLocal
 from app.models.session import Session as SessionModel
-from app.services.emotion import analyze_audio_chunk, buffer_emotion_point
+from app.services.audio_pcm import is_pcm16_chunk
+from app.services.emotion import (
+    _delivery_style,
+    analyze_audio_chunk,
+    analyze_audio_waveform,
+    buffer_emotion_point,
+)
 from app.services.guesstimate.nudge_service import generate_tier2_nudge
 from app.services.laya import get_tier1_hint, process_laya_chunk
+from app.services.prosody import empty_prosody, extract_prosody_features
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Emotion Stream"])
 
-_CHUNK_SECONDS = 1.5
+_WEBM_CHUNK_SECONDS = 1.5
+_PCM_CHUNK_SECONDS = 0.1
+_WINDOW_SAMPLES = 32000
+_MIN_INFERENCE_SAMPLES = 16000
+_INFERENCE_INTERVAL_SEC = 1.0
 
 
 def _load_guesstimate_context(session_id: int):
@@ -41,6 +55,12 @@ def _load_guesstimate_context(session_id: int):
 async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
     await websocket.accept()
     elapsed = 0.0
+    pcm_window = deque(maxlen=_WINDOW_SAMPLES)
+    last_inference_time = 0.0
+    smooth_confidence = 65.0
+    smooth_nervousness = 22.0
+    smooth_composure = 80.0
+    ALPHA = 0.35
 
     session_category, question_text = await asyncio.to_thread(
         _load_guesstimate_context, session_id
@@ -106,9 +126,12 @@ async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
                         is_guesstimate = True
                 continue
 
+            is_pcm = is_pcm16_chunk(payload)
+            chunk_seconds = _PCM_CHUNK_SECONDS if is_pcm else _WEBM_CHUNK_SECONDS
+
             if is_guesstimate:
                 laya_result = await asyncio.to_thread(
-                    process_laya_chunk, session_id, payload, _CHUNK_SECONDS
+                    process_laya_chunk, session_id, payload, chunk_seconds
                 )
 
                 if laya_result.get("is_speaking"):
@@ -134,15 +157,82 @@ async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
                         tier2_task.cancel()
                     tier2_task = asyncio.create_task(run_tier2())
 
-            try:
-                result = await asyncio.to_thread(analyze_audio_chunk, payload)
-            except Exception as exc:
-                logger.warning(
-                    "Live emotion analysis failed for session %s: %s",
-                    session_id,
-                    exc,
+            if is_pcm:
+                int16_samples = np.frombuffer(payload, dtype="<i2")
+                float_samples = int16_samples.astype(np.float32) / 32768.0
+                pcm_window.extend(float_samples)
+                elapsed = round(elapsed + chunk_seconds, 2)
+
+                now = time.monotonic()
+                if (
+                    now - last_inference_time < _INFERENCE_INTERVAL_SEC
+                    or len(pcm_window) < _MIN_INFERENCE_SAMPLES
+                ):
+                    continue
+
+                last_inference_time = now
+                window_audio = np.array(pcm_window, dtype=np.float32)
+
+                try:
+                    prosody_result = await asyncio.to_thread(
+                        extract_prosody_features, window_audio
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Live prosody analysis failed for session %s: %s",
+                        session_id,
+                        exc,
+                    )
+                    prosody_result = empty_prosody()
+
+                try:
+                    result = await asyncio.to_thread(
+                        analyze_audio_waveform,
+                        window_audio,
+                        prosody=prosody_result,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Live emotion analysis failed for session %s: %s",
+                        session_id,
+                        exc,
+                    )
+                    result = {}
+
+                start_sec = round(
+                    max(0.0, elapsed - _INFERENCE_INTERVAL_SEC), 2
                 )
-                result = {}
+                end_sec = elapsed
+                point_weight = max(0.1, round(end_sec - start_sec, 2))
+            else:
+                try:
+                    prosody_result = await asyncio.to_thread(
+                        extract_prosody_features, payload
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Live prosody analysis failed for session %s: %s",
+                        session_id,
+                        exc,
+                    )
+                    prosody_result = empty_prosody()
+
+                try:
+                    result = await asyncio.to_thread(
+                        analyze_audio_chunk, payload
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "Live emotion analysis failed for session %s: %s",
+                        session_id,
+                        exc,
+                    )
+                    result = {}
+
+                start_sec = round(elapsed, 2)
+                end_sec = round(elapsed + chunk_seconds, 2)
+                elapsed = end_sec
+                point_weight = chunk_seconds
 
             summary = result.get("summary") or {}
             dimensions = result.get("dimensions") or {}
@@ -150,11 +240,19 @@ async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
             confidence = float(summary.get("confidence_score", 50.0) or 50.0)
             nervousness = float(summary.get("nervousness_score", 50.0) or 50.0)
             composure = float(summary.get("composure_score", 60.0) or 60.0)
-            delivery_style = summary.get("delivery_style") or "Neutral"
 
-            start_sec = round(elapsed, 2)
-            end_sec = round(elapsed + _CHUNK_SECONDS, 2)
-            elapsed = end_sec
+            smooth_confidence = (
+                ALPHA * confidence + (1.0 - ALPHA) * smooth_confidence
+            )
+            smooth_nervousness = (
+                ALPHA * nervousness + (1.0 - ALPHA) * smooth_nervousness
+            )
+            smooth_composure = (
+                ALPHA * composure + (1.0 - ALPHA) * smooth_composure
+            )
+            smooth_delivery_style = _delivery_style(
+                smooth_confidence, smooth_nervousness, smooth_composure
+            )
 
             point = {
                 "start_sec": start_sec,
@@ -165,7 +263,22 @@ async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
                 "arousal": dimensions.get("arousal"),
                 "valence": dimensions.get("valence"),
                 "dominance": dimensions.get("dominance"),
-                "weight": _CHUNK_SECONDS,
+                "pitch_mean_hz": prosody_result.get("pitch_mean_hz", 0.0),
+                "pitch_std_hz": prosody_result.get("pitch_std_hz", 0.0),
+                "dynamic_range_semitones": prosody_result.get(
+                    "dynamic_range_semitones", 0.0
+                ),
+                "is_monotone": prosody_result.get("is_monotone", False),
+                "vocal_jitter_percent": prosody_result.get(
+                    "vocal_jitter_percent", 0.0
+                ),
+                "vocal_shimmer_percent": prosody_result.get(
+                    "vocal_shimmer_percent", 0.0
+                ),
+                "hnr_db": prosody_result.get("hnr_db", 0.0),
+                "vocal_tremor": prosody_result.get("vocal_tremor_flag", False),
+                "delivery_clarity": prosody_result.get("delivery_clarity", "Clear"),
+                "weight": point_weight,
             }
 
             try:
@@ -179,10 +292,16 @@ async def emotion_websocket(websocket: WebSocket, session_id: int) -> None:
 
             await send(
                 {
-                    "confidence": round(confidence, 2),
-                    "nervousness": round(nervousness, 2),
-                    "composure": round(composure, 2),
-                    "delivery_style": delivery_style,
+                    "confidence": round(smooth_confidence, 1),
+                    "nervousness": round(smooth_nervousness, 1),
+                    "composure": round(smooth_composure, 1),
+                    "delivery_style": smooth_delivery_style,
+                    "pitch_mean_hz": prosody_result.get("pitch_mean_hz", 0.0),
+                    "pitch_std_hz": prosody_result.get("pitch_std_hz", 0.0),
+                    "is_monotone": prosody_result.get("is_monotone", False),
+                    "vocal_tremor": prosody_result.get(
+                        "vocal_tremor_flag", False
+                    ),
                     "start_sec": start_sec,
                     "end_sec": end_sec,
                 }

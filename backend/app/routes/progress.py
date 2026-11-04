@@ -10,25 +10,19 @@ from app.models.session import Session as SessionModel, SessionAnalysis
 from app.models.guesstimate import GuesstimateCase
 from app.models.hr import HRInterview
 from app.models.user import User
-from app.routes.sessions import _get_optional_user
+from app.routes.auth import get_current_user
+from app.services.session_ownership import owned_session_scope
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
-
-
-def _user_session_filter(current_user: Optional[User]):
-    """Isolate telemetry to the logged-in candidate, or fallback to User 1 for guest sandbox."""
-    if current_user is not None:
-        return SessionModel.user_id == current_user.id
-    return (SessionModel.user_id == 1) | (SessionModel.user_id.is_(None))
 
 
 @router.get("/summary")
 def get_summary(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     sessions = db.scalars(
-        select(SessionModel).where(_user_session_filter(current_user))
+        select(SessionModel).where(owned_session_scope(current_user))
     ).all()
     session_ids = [s.id for s in sessions]
     analyses = (
@@ -86,12 +80,12 @@ def get_summary(
 @router.get("/metrics")
 def get_metrics(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> List[Dict[str, Any]]:
     """Return per-session metrics sorted chronologically for time-series charts."""
     sessions = db.scalars(
         select(SessionModel)
-        .where(_user_session_filter(current_user))
+        .where(owned_session_scope(current_user))
         .order_by(SessionModel.created_at.asc())
     ).all()
     output: List[Dict[str, Any]] = []
@@ -116,13 +110,13 @@ def get_metrics(
 @router.get("/technical")
 def get_technical_progress(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return technical interview scores, progression over time, and competency benchmarks."""
     sessions = db.scalars(
         select(SessionModel)
         .where(
-            _user_session_filter(current_user),
+            owned_session_scope(current_user),
             SessionModel.round_type == "technical",
         )
         .order_by(SessionModel.created_at.asc())
@@ -248,13 +242,13 @@ def get_technical_progress(
 @router.get("/guesstimate")
 def get_guesstimate_progress(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return guesstimate & market sizing scores, MECE structure progression, and accuracy."""
     sessions = db.scalars(
         select(SessionModel)
         .where(
-            _user_session_filter(current_user),
+            owned_session_scope(current_user),
             SessionModel.round_type == "guesstimate",
         )
         .order_by(SessionModel.created_at.asc())
@@ -363,13 +357,13 @@ def get_guesstimate_progress(
 @router.get("/hr")
 def get_hr_progress(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Return HR & behavioral scores, STAR completeness, and personal ownership progression."""
     sessions = db.scalars(
         select(SessionModel)
         .where(
-            _user_session_filter(current_user),
+            owned_session_scope(current_user),
             SessionModel.round_type == "hr",
         )
         .order_by(SessionModel.created_at.asc())
@@ -446,10 +440,10 @@ def get_hr_progress(
 @router.get("/placement-readiness")
 def get_placement_readiness(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(_get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Standardized 3-layer cross-round evaluation contracts across all four modules."""
-    user_filter = _user_session_filter(current_user)
+    user_filter = owned_session_scope(current_user)
 
     # 1. JAM Sessions
     jam_sessions = db.scalars(

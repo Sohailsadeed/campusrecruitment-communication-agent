@@ -1,0 +1,59 @@
+# =====================================================================
+# SpeakFlow / Communication Agent — Supporting Infrastructure Services
+# Runs ONLY the stateful background servers (PostgreSQL, Redis, ChromaDB).
+# The Python FastAPI application and React frontend run natively in local
+# virtualenv / Node for maximum performance with ML models (Whisper/MediaPipe).
+#
+# Usage:
+#   docker compose -f docker-compose.services.yml up -d
+#   docker compose -f docker-compose.services.yml down
+# =====================================================================
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: speakflow_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: speakflow
+      POSTGRES_PASSWORD: speakflow
+      POSTGRES_DB: speakflow
+    volumes:
+      - speakflow_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U speakflow -d speakflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: speakflow_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - speakflow_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: speakflow_chromadb
+    restart: unless-stopped
+    ports:
+      - "8100:8000"
+    environment:
+      - ANONYMIZED_TELEMETRY=false
+    volumes:
+      - speakflow_chromadata:/chroma/chroma
+
+volumes:
+  speakflow_pgdata:
+  speakflow_redisdata:
+  speakflow_chromadata:

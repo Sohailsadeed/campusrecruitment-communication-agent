@@ -1,0 +1,47 @@
+# =====================================================================
+# Self-hosted LiveKit SFU — SpeakFlow profile
+#
+# This file holds NO secrets. The API key pair is given to the container as
+# the LIVEKIT_KEYS environment variable (docker-compose.livekit.yml), which
+# composes it out of .env.livekit — a file git-ignored and never committed.
+#
+# Every value here can be overridden per environment with the matching
+# LIVEKIT_* variable (livekit-server reads env with the LIVEKIT_ prefix and
+# maps `_` to config nesting), so a deployment only has to set environment
+# variables — this file does not have to be edited, and it carries no
+# localhost assumption the application would inherit.
+# =====================================================================
+
+# HTTP + WebSocket signalling port: this is what the browser SDK connects to
+# (ws://<host>:7880/rtc in local development, wss://<domain> behind a proxy).
+port: 7880
+
+logging:
+  level: info
+  # Log only identifiers LiveKit chooses itself. SpeakFlow never sends a token,
+  # an API secret or audio through this file's settings.
+
+rtc:
+  # WebRTC media over TCP fallback, used when a network drops UDP. Published by
+  # docker-compose.livekit.yml, so a browser behind strict NAT still gets media.
+  tcp_port: 7881
+
+  # Deliberately narrow media range: each port needs a UDP mapping, and Docker
+  # Desktop publishes one mapping per port. Raise it for a real deployment.
+  port_range_start: 50000
+  port_range_end: 50010
+
+  # Single-node local development: no cloud provider to ask for a public address.
+  # A deployment on a public interface sets LIVEKIT_RTC_USE_EXTERNAL_IP=true
+  # (or advertises its address with LIVEKIT_RTC_NODE_IP_IPV4) instead.
+  use_external_ip: false
+
+# A room is created when the first participant joins and retired when the last
+# one leaves, so SpeakFlow's per-session rooms do not accumulate state.
+room:
+  empty_timeout: 30
+  departure_timeout: 20
+
+# Local development runs one node, so LiveKit keeps its state in memory. Multi
+# node deployments set LIVEKIT_REDIS_ADDRESS to the same redis the app already
+# runs (speakflow_redis) — the redis service needs no new credentials for V1.

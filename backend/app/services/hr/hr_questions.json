@@ -1,0 +1,962 @@
+[
+  {
+    "id": "hr_q01",
+    "question": "Tell me about a time you had to learn something completely new quickly.",
+    "category": "Adaptability",
+    "difficulty": "Easy",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "flexible",
+      "change"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear articulation of mindset shift and rapid unlearning/relearning",
+        "Proactive problem solving under changing constraints",
+        "Humility and resilience when initial assumptions failed"
+      ],
+      "red_flags": [
+        "Resisting change or blaming external management decisions",
+        "Rigid adherence to outdated plans without re-evaluating",
+        "Lack of concrete examples of growth"
+      ],
+      "key_focus": "Flexibility, speed of learning, and handling unexpected pivots."
+    }
+  },
+  {
+    "id": "hr_q02",
+    "question": "Describe a time you handled a difficult situation professionally.",
+    "category": "Conflict Resolution",
+    "difficulty": "Hard",
+    "source_type": "Behavioral",
+    "keywords": [
+      "problem",
+      "disagree"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Active listening and de-escalation with emotional intelligence",
+        "Focusing on shared goals and data-driven objective trade-offs",
+        "'Disagree and commit' commitment to final team consensus"
+      ],
+      "red_flags": [
+        "Finger-pointing, passive-aggressive avoidance, or venting",
+        "Escalating to superiors prematurely without trying 1-on-1 mediation",
+        "Believing one is always 100% right and others are foolish"
+      ],
+      "key_focus": "Empathy, constructive mediation, and maintaining team psychological safety."
+    }
+  },
+  {
+    "id": "hr_q03",
+    "question": "Where do you see yourself in 5 years?",
+    "category": "Career Goals",
+    "difficulty": "Medium",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "aspiration",
+      "dream"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Realistic yet ambitious 2-to-5 year progression plan",
+        "Self-awareness of current technical/behavioral skill gaps",
+        "Alignment between personal trajectory and the prospective role"
+      ],
+      "red_flags": [
+        "Aimless, non-committal, or wildly unrealistic expectations",
+        "Viewing the company merely as a short-term resume stepping stone",
+        "No proactive effort demonstrated to acquire target skills"
+      ],
+      "key_focus": "Long-term ambition, growth orientation, and role alignment."
+    }
+  },
+  {
+    "id": "hr_q04",
+    "question": "Tell me about a conflict you had with a coworker and how you resolved it.",
+    "category": "Conflict Resolution",
+    "difficulty": "Hard",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "problem",
+      "disagree"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Active listening and de-escalation with emotional intelligence",
+        "Focusing on shared goals and data-driven objective trade-offs",
+        "'Disagree and commit' commitment to final team consensus"
+      ],
+      "red_flags": [
+        "Finger-pointing, passive-aggressive avoidance, or venting",
+        "Escalating to superiors prematurely without trying 1-on-1 mediation",
+        "Believing one is always 100% right and others are foolish"
+      ],
+      "key_focus": "Empathy, constructive mediation, and maintaining team psychological safety."
+    }
+  },
+  {
+    "id": "hr_q05",
+    "question": "What skills do you hope to develop in your next role?",
+    "category": "Career Goals",
+    "difficulty": "Easy",
+    "source_type": "Situational",
+    "keywords": [
+      "future",
+      "aspiration"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Realistic yet ambitious 2-to-5 year progression plan",
+        "Self-awareness of current technical/behavioral skill gaps",
+        "Alignment between personal trajectory and the prospective role"
+      ],
+      "red_flags": [
+        "Aimless, non-committal, or wildly unrealistic expectations",
+        "Viewing the company merely as a short-term resume stepping stone",
+        "No proactive effort demonstrated to acquire target skills"
+      ],
+      "key_focus": "Long-term ambition, growth orientation, and role alignment."
+    }
+  },
+  {
+    "id": "hr_q06",
+    "question": "What's the most significant change you've had to adapt to at work?",
+    "category": "Adaptability",
+    "difficulty": "Medium",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "learn",
+      "adjust"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear articulation of mindset shift and rapid unlearning/relearning",
+        "Proactive problem solving under changing constraints",
+        "Humility and resilience when initial assumptions failed"
+      ],
+      "red_flags": [
+        "Resisting change or blaming external management decisions",
+        "Rigid adherence to outdated plans without re-evaluating",
+        "Lack of concrete examples of growth"
+      ],
+      "key_focus": "Flexibility, speed of learning, and handling unexpected pivots."
+    }
+  },
+  {
+    "id": "hr_q07",
+    "question": "How does this role fit into your career path?",
+    "category": "Career Goals",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "dream",
+      "plan"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Realistic yet ambitious 2-to-5 year progression plan",
+        "Self-awareness of current technical/behavioral skill gaps",
+        "Alignment between personal trajectory and the prospective role"
+      ],
+      "red_flags": [
+        "Aimless, non-committal, or wildly unrealistic expectations",
+        "Viewing the company merely as a short-term resume stepping stone",
+        "No proactive effort demonstrated to acquire target skills"
+      ],
+      "key_focus": "Long-term ambition, growth orientation, and role alignment."
+    }
+  },
+  {
+    "id": "hr_q08",
+    "question": "Tell me about a time you worked well within a team.",
+    "category": "Team Collaboration",
+    "difficulty": "Medium",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "team",
+      "collaboration"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Valuing diverse perspectives and cross-functional synergy",
+        "Willingness to take on unglamorous tasks to help the team ship",
+        "Transparent communication and peer recognition"
+      ],
+      "red_flags": [
+        "Siloed lone-wolf mentality ('I prefer doing it all myself')",
+        "Complaining about teammates' incompetence",
+        "Lack of credit sharing"
+      ],
+      "key_focus": "Trust-building, mutual accountability, and collective delivery."
+    }
+  },
+  {
+    "id": "hr_q09",
+    "question": "What are your expectations from leadership in a company?",
+    "category": "Culture Fit",
+    "difficulty": "Medium",
+    "source_type": "Behavioral",
+    "keywords": [
+      "fit",
+      "company"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Authentic alignment with organizational values and technical craft",
+        "Demonstrated desire for continuous feedback and professional growth",
+        "Positive contribution to engineering and team culture"
+      ],
+      "red_flags": [
+        "Generic platitudes without company-specific understanding",
+        "Sole focus on compensation/perks rather than team mission",
+        "Cynical or disengaged attitude towards collaboration"
+      ],
+      "key_focus": "Value resonance, ethical grounding, and long-term commitment."
+    }
+  },
+  {
+    "id": "hr_q10",
+    "question": "What motivates you to come to work every day?",
+    "category": "Motivation",
+    "difficulty": "Easy",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "why",
+      "reason"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Intrinsic drive to solve hard problems and master skills",
+        "Clear personal connection to the work and discipline during repetitive tasks",
+        "Goal-oriented persistence through obstacles"
+      ],
+      "red_flags": [
+        "Apathy, burnout indicators, or purely extrinsic motivation",
+        "Unable to articulate why this specific domain or company excites them",
+        "Easily discouraged when work becomes tedious or difficult"
+      ],
+      "key_focus": "Intrinsic motivation, perseverance, and passion for the craft."
+    }
+  },
+  {
+    "id": "hr_q11",
+    "question": "How do you motivate others in a leadership role?",
+    "category": "Leadership",
+    "difficulty": "Hard",
+    "source_type": "Situational",
+    "keywords": [
+      "guide",
+      "mentor"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear personal ownership ('I initiated', 'I mentored', 'I unblocked')",
+        "Empowering team members while maintaining accountability",
+        "Concrete business or team outcome resulting from leadership"
+      ],
+      "red_flags": [
+        "Taking credit for team members' individual work",
+        "Micromanaging or inability to delegate effectively",
+        "Authoritarian tone without empathy or coaching"
+      ],
+      "key_focus": "Individual agency, mentoring, task delegation, and motivating peers."
+    }
+  },
+  {
+    "id": "hr_q12",
+    "question": "What tools or methods help you stay organized?",
+    "category": "Work Style",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "daily routine",
+      "method"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Structured prioritization frameworks (Eisenhower matrix, timeblocking, agile)",
+        "High discipline and asynchronous clarity in remote/hybrid environments",
+        "Balancing deep individual focus with collaborative check-ins"
+      ],
+      "red_flags": [
+        "Disorganized chaos, constant firefighting, and missed deadlines",
+        "Severe inability to work independently without constant supervision",
+        "Overcommitting and ghosting team members"
+      ],
+      "key_focus": "Personal organization, autonomy, prioritization, and productivity."
+    }
+  },
+  {
+    "id": "hr_q13",
+    "question": "How do you build trust with new teammates?",
+    "category": "Team Collaboration",
+    "difficulty": "Easy",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "cooperate",
+      "team"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Valuing diverse perspectives and cross-functional synergy",
+        "Willingness to take on unglamorous tasks to help the team ship",
+        "Transparent communication and peer recognition"
+      ],
+      "red_flags": [
+        "Siloed lone-wolf mentality ('I prefer doing it all myself')",
+        "Complaining about teammates' incompetence",
+        "Lack of credit sharing"
+      ],
+      "key_focus": "Trust-building, mutual accountability, and collective delivery."
+    }
+  },
+  {
+    "id": "hr_q14",
+    "question": "Describe a time you felt out of place in a workplace culture.",
+    "category": "Culture Fit",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "value",
+      "environment"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Authentic alignment with organizational values and technical craft",
+        "Demonstrated desire for continuous feedback and professional growth",
+        "Positive contribution to engineering and team culture"
+      ],
+      "red_flags": [
+        "Generic platitudes without company-specific understanding",
+        "Sole focus on compensation/perks rather than team mission",
+        "Cynical or disengaged attitude towards collaboration"
+      ],
+      "key_focus": "Value resonance, ethical grounding, and long-term commitment."
+    }
+  },
+  {
+    "id": "hr_q15",
+    "question": "Do you prefer working independently or in teams? Why?",
+    "category": "Work Style",
+    "difficulty": "Hard",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "workflow",
+      "process"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Structured prioritization frameworks (Eisenhower matrix, timeblocking, agile)",
+        "High discipline and asynchronous clarity in remote/hybrid environments",
+        "Balancing deep individual focus with collaborative check-ins"
+      ],
+      "red_flags": [
+        "Disorganized chaos, constant firefighting, and missed deadlines",
+        "Severe inability to work independently without constant supervision",
+        "Overcommitting and ghosting team members"
+      ],
+      "key_focus": "Personal organization, autonomy, prioritization, and productivity."
+    }
+  },
+  {
+    "id": "hr_q16",
+    "question": "Describe a time you led a project or team.",
+    "category": "Leadership",
+    "difficulty": "Hard",
+    "source_type": "Behavioral",
+    "keywords": [
+      "mentor",
+      "manage"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear personal ownership ('I initiated', 'I mentored', 'I unblocked')",
+        "Empowering team members while maintaining accountability",
+        "Concrete business or team outcome resulting from leadership"
+      ],
+      "red_flags": [
+        "Taking credit for team members' individual work",
+        "Micromanaging or inability to delegate effectively",
+        "Authoritarian tone without empathy or coaching"
+      ],
+      "key_focus": "Individual agency, mentoring, task delegation, and motivating peers."
+    }
+  },
+  {
+    "id": "hr_q17",
+    "question": "How do you delegate tasks effectively?",
+    "category": "Leadership",
+    "difficulty": "Hard",
+    "source_type": "Behavioral",
+    "keywords": [
+      "supervise",
+      "manage"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear personal ownership ('I initiated', 'I mentored', 'I unblocked')",
+        "Empowering team members while maintaining accountability",
+        "Concrete business or team outcome resulting from leadership"
+      ],
+      "red_flags": [
+        "Taking credit for team members' individual work",
+        "Micromanaging or inability to delegate effectively",
+        "Authoritarian tone without empathy or coaching"
+      ],
+      "key_focus": "Individual agency, mentoring, task delegation, and motivating peers."
+    }
+  },
+  {
+    "id": "hr_q18",
+    "question": "How do you align with our company values?",
+    "category": "Culture Fit",
+    "difficulty": "Easy",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "company",
+      "fit"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Authentic alignment with organizational values and technical craft",
+        "Demonstrated desire for continuous feedback and professional growth",
+        "Positive contribution to engineering and team culture"
+      ],
+      "red_flags": [
+        "Generic platitudes without company-specific understanding",
+        "Sole focus on compensation/perks rather than team mission",
+        "Cynical or disengaged attitude towards collaboration"
+      ],
+      "key_focus": "Value resonance, ethical grounding, and long-term commitment."
+    }
+  },
+  {
+    "id": "hr_q19",
+    "question": "Why do you want to work at our company?",
+    "category": "Motivation",
+    "difficulty": "Hard",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "inspiration",
+      "why"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Intrinsic drive to solve hard problems and master skills",
+        "Clear personal connection to the work and discipline during repetitive tasks",
+        "Goal-oriented persistence through obstacles"
+      ],
+      "red_flags": [
+        "Apathy, burnout indicators, or purely extrinsic motivation",
+        "Unable to articulate why this specific domain or company excites them",
+        "Easily discouraged when work becomes tedious or difficult"
+      ],
+      "key_focus": "Intrinsic motivation, perseverance, and passion for the craft."
+    }
+  },
+  {
+    "id": "hr_q20",
+    "question": "What makes a good leader in your opinion?",
+    "category": "Leadership",
+    "difficulty": "Hard",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "mentor",
+      "guide"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear personal ownership ('I initiated', 'I mentored', 'I unblocked')",
+        "Empowering team members while maintaining accountability",
+        "Concrete business or team outcome resulting from leadership"
+      ],
+      "red_flags": [
+        "Taking credit for team members' individual work",
+        "Micromanaging or inability to delegate effectively",
+        "Authoritarian tone without empathy or coaching"
+      ],
+      "key_focus": "Individual agency, mentoring, task delegation, and motivating peers."
+    }
+  },
+  {
+    "id": "hr_q21",
+    "question": "What are your long-term career aspirations?",
+    "category": "Career Goals",
+    "difficulty": "Easy",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "next step",
+      "aspiration"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Realistic yet ambitious 2-to-5 year progression plan",
+        "Self-awareness of current technical/behavioral skill gaps",
+        "Alignment between personal trajectory and the prospective role"
+      ],
+      "red_flags": [
+        "Aimless, non-committal, or wildly unrealistic expectations",
+        "Viewing the company merely as a short-term resume stepping stone",
+        "No proactive effort demonstrated to acquire target skills"
+      ],
+      "key_focus": "Long-term ambition, growth orientation, and role alignment."
+    }
+  },
+  {
+    "id": "hr_q22",
+    "question": "Describe your ideal workday.",
+    "category": "Work Style",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "method",
+      "workflow"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Structured prioritization frameworks (Eisenhower matrix, timeblocking, agile)",
+        "High discipline and asynchronous clarity in remote/hybrid environments",
+        "Balancing deep individual focus with collaborative check-ins"
+      ],
+      "red_flags": [
+        "Disorganized chaos, constant firefighting, and missed deadlines",
+        "Severe inability to work independently without constant supervision",
+        "Overcommitting and ghosting team members"
+      ],
+      "key_focus": "Personal organization, autonomy, prioritization, and productivity."
+    }
+  },
+  {
+    "id": "hr_q23",
+    "question": "How do you deal with feedback that you disagree with?",
+    "category": "Conflict Resolution",
+    "difficulty": "Hard",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "resolve",
+      "conflict"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Active listening and de-escalation with emotional intelligence",
+        "Focusing on shared goals and data-driven objective trade-offs",
+        "'Disagree and commit' commitment to final team consensus"
+      ],
+      "red_flags": [
+        "Finger-pointing, passive-aggressive avoidance, or venting",
+        "Escalating to superiors prematurely without trying 1-on-1 mediation",
+        "Believing one is always 100% right and others are foolish"
+      ],
+      "key_focus": "Empathy, constructive mediation, and maintaining team psychological safety."
+    }
+  },
+  {
+    "id": "hr_q24",
+    "question": "What role do you usually play in group settings?",
+    "category": "Team Collaboration",
+    "difficulty": "Hard",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "team",
+      "cooperate"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Valuing diverse perspectives and cross-functional synergy",
+        "Willingness to take on unglamorous tasks to help the team ship",
+        "Transparent communication and peer recognition"
+      ],
+      "red_flags": [
+        "Siloed lone-wolf mentality ('I prefer doing it all myself')",
+        "Complaining about teammates' incompetence",
+        "Lack of credit sharing"
+      ],
+      "key_focus": "Trust-building, mutual accountability, and collective delivery."
+    }
+  },
+  {
+    "id": "hr_q25",
+    "question": "What would you do if you disagreed with your manager?",
+    "category": "Conflict Resolution",
+    "difficulty": "Easy",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "challenge",
+      "problem"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Active listening and de-escalation with emotional intelligence",
+        "Focusing on shared goals and data-driven objective trade-offs",
+        "'Disagree and commit' commitment to final team consensus"
+      ],
+      "red_flags": [
+        "Finger-pointing, passive-aggressive avoidance, or venting",
+        "Escalating to superiors prematurely without trying 1-on-1 mediation",
+        "Believing one is always 100% right and others are foolish"
+      ],
+      "key_focus": "Empathy, constructive mediation, and maintaining team psychological safety."
+    }
+  },
+  {
+    "id": "hr_q26",
+    "question": "Tell me about a time you were highly motivated to achieve a goal.",
+    "category": "Motivation",
+    "difficulty": "Easy",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "goal",
+      "reason"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Intrinsic drive to solve hard problems and master skills",
+        "Clear personal connection to the work and discipline during repetitive tasks",
+        "Goal-oriented persistence through obstacles"
+      ],
+      "red_flags": [
+        "Apathy, burnout indicators, or purely extrinsic motivation",
+        "Unable to articulate why this specific domain or company excites them",
+        "Easily discouraged when work becomes tedious or difficult"
+      ],
+      "key_focus": "Intrinsic motivation, perseverance, and passion for the craft."
+    }
+  },
+  {
+    "id": "hr_q27",
+    "question": "How do you contribute to a positive team environment?",
+    "category": "Culture Fit",
+    "difficulty": "Easy",
+    "source_type": "Situational",
+    "keywords": [
+      "culture",
+      "environment"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Authentic alignment with organizational values and technical craft",
+        "Demonstrated desire for continuous feedback and professional growth",
+        "Positive contribution to engineering and team culture"
+      ],
+      "red_flags": [
+        "Generic platitudes without company-specific understanding",
+        "Sole focus on compensation/perks rather than team mission",
+        "Cynical or disengaged attitude towards collaboration"
+      ],
+      "key_focus": "Value resonance, ethical grounding, and long-term commitment."
+    }
+  },
+  {
+    "id": "hr_q28",
+    "question": "What drives your passion for this field?",
+    "category": "Motivation",
+    "difficulty": "Medium",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "reason",
+      "why"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Intrinsic drive to solve hard problems and master skills",
+        "Clear personal connection to the work and discipline during repetitive tasks",
+        "Goal-oriented persistence through obstacles"
+      ],
+      "red_flags": [
+        "Apathy, burnout indicators, or purely extrinsic motivation",
+        "Unable to articulate why this specific domain or company excites them",
+        "Easily discouraged when work becomes tedious or difficult"
+      ],
+      "key_focus": "Intrinsic motivation, perseverance, and passion for the craft."
+    }
+  },
+  {
+    "id": "hr_q29",
+    "question": "How do you react to sudden changes in priorities?",
+    "category": "Adaptability",
+    "difficulty": "Hard",
+    "source_type": "Behavioral",
+    "keywords": [
+      "adjust",
+      "change"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear articulation of mindset shift and rapid unlearning/relearning",
+        "Proactive problem solving under changing constraints",
+        "Humility and resilience when initial assumptions failed"
+      ],
+      "red_flags": [
+        "Resisting change or blaming external management decisions",
+        "Rigid adherence to outdated plans without re-evaluating",
+        "Lack of concrete examples of growth"
+      ],
+      "key_focus": "Flexibility, speed of learning, and handling unexpected pivots."
+    }
+  },
+  {
+    "id": "hr_q30",
+    "question": "How do you respond when a teammate isn't pulling their weight?",
+    "category": "Conflict Resolution",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "challenge",
+      "disagree"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Active listening and de-escalation with emotional intelligence",
+        "Focusing on shared goals and data-driven objective trade-offs",
+        "'Disagree and commit' commitment to final team consensus"
+      ],
+      "red_flags": [
+        "Finger-pointing, passive-aggressive avoidance, or venting",
+        "Escalating to superiors prematurely without trying 1-on-1 mediation",
+        "Believing one is always 100% right and others are foolish"
+      ],
+      "key_focus": "Empathy, constructive mediation, and maintaining team psychological safety."
+    }
+  },
+  {
+    "id": "hr_q31",
+    "question": "Tell me about a time you mentored someone.",
+    "category": "Leadership",
+    "difficulty": "Medium",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "manage",
+      "mentor"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear personal ownership ('I initiated', 'I mentored', 'I unblocked')",
+        "Empowering team members while maintaining accountability",
+        "Concrete business or team outcome resulting from leadership"
+      ],
+      "red_flags": [
+        "Taking credit for team members' individual work",
+        "Micromanaging or inability to delegate effectively",
+        "Authoritarian tone without empathy or coaching"
+      ],
+      "key_focus": "Individual agency, mentoring, task delegation, and motivating peers."
+    }
+  },
+  {
+    "id": "hr_q32",
+    "question": "How do you ensure productivity when working remotely?",
+    "category": "Work Style",
+    "difficulty": "Hard",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "process",
+      "tool"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Structured prioritization frameworks (Eisenhower matrix, timeblocking, agile)",
+        "High discipline and asynchronous clarity in remote/hybrid environments",
+        "Balancing deep individual focus with collaborative check-ins"
+      ],
+      "red_flags": [
+        "Disorganized chaos, constant firefighting, and missed deadlines",
+        "Severe inability to work independently without constant supervision",
+        "Overcommitting and ghosting team members"
+      ],
+      "key_focus": "Personal organization, autonomy, prioritization, and productivity."
+    }
+  },
+  {
+    "id": "hr_q33",
+    "question": "How do you stay motivated during repetitive tasks?",
+    "category": "Motivation",
+    "difficulty": "Medium",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "inspiration",
+      "passion"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Intrinsic drive to solve hard problems and master skills",
+        "Clear personal connection to the work and discipline during repetitive tasks",
+        "Goal-oriented persistence through obstacles"
+      ],
+      "red_flags": [
+        "Apathy, burnout indicators, or purely extrinsic motivation",
+        "Unable to articulate why this specific domain or company excites them",
+        "Easily discouraged when work becomes tedious or difficult"
+      ],
+      "key_focus": "Intrinsic motivation, perseverance, and passion for the craft."
+    }
+  },
+  {
+    "id": "hr_q34",
+    "question": "How do you organize and prioritize your daily tasks?",
+    "category": "Work Style",
+    "difficulty": "Medium",
+    "source_type": "STAR-Based",
+    "keywords": [
+      "tool",
+      "process"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Structured prioritization frameworks (Eisenhower matrix, timeblocking, agile)",
+        "High discipline and asynchronous clarity in remote/hybrid environments",
+        "Balancing deep individual focus with collaborative check-ins"
+      ],
+      "red_flags": [
+        "Disorganized chaos, constant firefighting, and missed deadlines",
+        "Severe inability to work independently without constant supervision",
+        "Overcommitting and ghosting team members"
+      ],
+      "key_focus": "Personal organization, autonomy, prioritization, and productivity."
+    }
+  },
+  {
+    "id": "hr_q35",
+    "question": "What type of company culture do you thrive in?",
+    "category": "Culture Fit",
+    "difficulty": "Hard",
+    "source_type": "Behavioral",
+    "keywords": [
+      "company",
+      "culture"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Authentic alignment with organizational values and technical craft",
+        "Demonstrated desire for continuous feedback and professional growth",
+        "Positive contribution to engineering and team culture"
+      ],
+      "red_flags": [
+        "Generic platitudes without company-specific understanding",
+        "Sole focus on compensation/perks rather than team mission",
+        "Cynical or disengaged attitude towards collaboration"
+      ],
+      "key_focus": "Value resonance, ethical grounding, and long-term commitment."
+    }
+  },
+  {
+    "id": "hr_q36",
+    "question": "How do you handle disagreements within a team?",
+    "category": "Team Collaboration",
+    "difficulty": "Easy",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "partner",
+      "group"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Valuing diverse perspectives and cross-functional synergy",
+        "Willingness to take on unglamorous tasks to help the team ship",
+        "Transparent communication and peer recognition"
+      ],
+      "red_flags": [
+        "Siloed lone-wolf mentality ('I prefer doing it all myself')",
+        "Complaining about teammates' incompetence",
+        "Lack of credit sharing"
+      ],
+      "key_focus": "Trust-building, mutual accountability, and collective delivery."
+    }
+  },
+  {
+    "id": "hr_q37",
+    "question": "Describe a project where teamwork was essential to success.",
+    "category": "Team Collaboration",
+    "difficulty": "Medium",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "partner",
+      "team"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Valuing diverse perspectives and cross-functional synergy",
+        "Willingness to take on unglamorous tasks to help the team ship",
+        "Transparent communication and peer recognition"
+      ],
+      "red_flags": [
+        "Siloed lone-wolf mentality ('I prefer doing it all myself')",
+        "Complaining about teammates' incompetence",
+        "Lack of credit sharing"
+      ],
+      "key_focus": "Trust-building, mutual accountability, and collective delivery."
+    }
+  },
+  {
+    "id": "hr_q38",
+    "question": "Describe a time you failed and what you learned from it.",
+    "category": "Adaptability",
+    "difficulty": "Medium",
+    "source_type": "Situational",
+    "keywords": [
+      "change",
+      "flexible"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear articulation of mindset shift and rapid unlearning/relearning",
+        "Proactive problem solving under changing constraints",
+        "Humility and resilience when initial assumptions failed"
+      ],
+      "red_flags": [
+        "Resisting change or blaming external management decisions",
+        "Rigid adherence to outdated plans without re-evaluating",
+        "Lack of concrete examples of growth"
+      ],
+      "key_focus": "Flexibility, speed of learning, and handling unexpected pivots."
+    }
+  },
+  {
+    "id": "hr_q39",
+    "question": "How do you stay updated with industry trends?",
+    "category": "Adaptability",
+    "difficulty": "Easy",
+    "source_type": "Open-Ended",
+    "keywords": [
+      "learn",
+      "adjust"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Clear articulation of mindset shift and rapid unlearning/relearning",
+        "Proactive problem solving under changing constraints",
+        "Humility and resilience when initial assumptions failed"
+      ],
+      "red_flags": [
+        "Resisting change or blaming external management decisions",
+        "Rigid adherence to outdated plans without re-evaluating",
+        "Lack of concrete examples of growth"
+      ],
+      "key_focus": "Flexibility, speed of learning, and handling unexpected pivots."
+    }
+  },
+  {
+    "id": "hr_q40",
+    "question": "What kind of growth opportunities are you looking for?",
+    "category": "Career Goals",
+    "difficulty": "Easy",
+    "source_type": "Behavioral",
+    "keywords": [
+      "dream",
+      "plan"
+    ],
+    "rubric": {
+      "green_flags": [
+        "Realistic yet ambitious 2-to-5 year progression plan",
+        "Self-awareness of current technical/behavioral skill gaps",
+        "Alignment between personal trajectory and the prospective role"
+      ],
+      "red_flags": [
+        "Aimless, non-committal, or wildly unrealistic expectations",
+        "Viewing the company merely as a short-term resume stepping stone",
+        "No proactive effort demonstrated to acquire target skills"
+      ],
+      "key_focus": "Long-term ambition, growth orientation, and role alignment."
+    }
+  }
+]

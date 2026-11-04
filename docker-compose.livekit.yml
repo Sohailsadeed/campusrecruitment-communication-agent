@@ -1,0 +1,60 @@
+# =====================================================================
+# SpeakFlow / Self-hosted LiveKit SFU
+#
+# Kept in its own compose file on purpose: docker-compose.services.yml owns
+# postgres/redis/chromadb, and `up -d` there must keep working for anyone who
+# has not configured LiveKit keys yet. Nothing in this file is joined to that
+# one, so starting it cannot disturb the services already running.
+#
+# Usage (from the repository root):
+#   cp .env.livekit.example .env.livekit     # then fill in the two values
+#   docker compose --env-file .env.livekit -f docker-compose.livekit.yml up -d
+#   docker compose --env-file .env.livekit -f docker-compose.livekit.yml config --quiet
+#
+# The API key pair reaches the container only as the LIVEKIT_KEYS environment
+# variable, composed from .env.livekit (git-ignored). No secret is written into
+# an image, a committed file, or a command line that `docker inspect` exposes
+# beyond that container's own environment.
+# =====================================================================
+
+# Its own compose project, so this file can never be seen as a superset of
+# docker-compose.services.yml: with a shared project name, `up --remove-orphans`
+# here would have treated speakflow_postgres/redis/chromadb as orphans and
+# deleted them.
+name: speakflow-livekit
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    container_name: speakflow_livekit
+    restart: unless-stopped
+    command: --config /etc/livekit/livekit.yaml
+    environment:
+      # key-id: secret — the pair SpeakFlow's backend signs room tokens with.
+      # The space after the colon is part of the syntax livekit-server insists
+      # on ("it needs to be exactly, key: secret"); without it the server exits
+      # at startup with no keys parsed.
+      # The `:?` guards fail loudly instead of starting a server that accepts
+      # nothing, which is the only safe outcome for an unconfigured key.
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY is not set — copy .env.livekit.example to .env.livekit}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET is not set — copy .env.livekit.example to .env.livekit}"
+
+      # Address the browser can reach. Docker Desktop publishes LiveKit's ports
+      # on the Windows host, so localhost is the reachable address in local
+      # development; leave it unset on a real host and LiveKit detects its own.
+      NODE_IP: "${LIVEKIT_NODE_IP:-}"
+    ports:
+      - "7880:7880"                        # HTTP + WebSocket signalling
+      - "7881:7881"                        # WebRTC media over TCP fallback
+      - "127.0.0.1:50000-50010:50000-50010/udp"   # WebRTC media over UDP
+    volumes:
+      - ./deploy/livekit/livekit.yaml:/etc/livekit/livekit.yaml:ro
+    healthcheck:
+      # The image has no shell; the server binary itself is the probe. `ports`
+      # loads the config and prints what it would bind, so a malformed config
+      # or a missing key pair shows up as an unhealthy container rather than a
+      # connection failure somewhere later in the stack.
+      test: ["CMD", "/livekit-server", "--config", "/etc/livekit/livekit.yaml", "ports"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

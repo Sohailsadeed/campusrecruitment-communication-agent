@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     resume_upload_dir: Path = UPLOAD_DIR / "resumes"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(BASE_DIR / ".env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

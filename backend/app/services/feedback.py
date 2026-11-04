@@ -1,4 +1,4 @@
-"""JAM & Multimodal LLM-backed feedback evaluation via OpenRouter with Ollama fallback."""
+I wante"""JAM & Multimodal LLM-backed feedback evaluation via OpenRouter with Ollama fallback."""
 from __future__ import annotations
 
 import json
@@ -425,22 +425,38 @@ def _heuristic_feedback(
 
 
 def _get_openrouter_api_key() -> Optional[str]:
-    """Retrieve OpenRouter API key from .env, environment, or settings."""
-    try:
-        from dotenv import dotenv_values
-        backend_dir = Path(__file__).resolve().parent.parent.parent
-        env_path = backend_dir / ".env"
-        if env_path.exists():
-            env_vals = dotenv_values(str(env_path))
-            key = env_vals.get("OPENROUTER_API_KEY")
-            if key and (key.startswith("sk-or-") or key.startswith("sk-")):
-                return key.strip()
-    except Exception as exc:
-        logger.debug("Failed to read .env file for OpenRouter key: %s", exc)
+    """Retrieve OpenRouter API key from settings, env vars, or directly parsing .env files."""
+    # 1. Check pydantic settings
+    if settings.openrouter_api_key and (
+        settings.openrouter_api_key.startswith("sk-or-") or settings.openrouter_api_key.startswith("sk-")
+    ):
+        return settings.openrouter_api_key.strip()
 
-    key = os.environ.get("OPENROUTER_API_KEY") or settings.openrouter_api_key
+    # 2. Check os.environ
+    key = os.environ.get("OPENROUTER_API_KEY")
     if key and (key.startswith("sk-or-") or key.startswith("sk-")):
         return key.strip()
+
+    # 3. Direct line-by-line file parsing (pure Python, zero dependencies)
+    candidate_paths = [
+        Path(__file__).resolve().parent.parent.parent / ".env",  # backend/.env
+        Path(__file__).resolve().parent.parent.parent.parent / ".env",  # root/.env
+        Path.cwd() / "backend" / ".env",
+        Path.cwd() / ".env",
+        settings.upload_dir.parent / ".env",
+    ]
+    for env_path in candidate_paths:
+        try:
+            if env_path.is_file():
+                for line in env_path.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line.startswith("OPENROUTER_API_KEY="):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val.startswith("sk-or-") or val.startswith("sk-"):
+                            return val
+        except Exception:
+            continue
+
     return None
 
 
@@ -512,8 +528,15 @@ def _call_openrouter(prompt: str, api_key: str) -> Optional[Dict[str, Any]]:
             if isinstance(parsed, dict) and ("content" in parsed or "score" in parsed or "rewrites" in parsed):
                 logger.info("Successfully generated JAM feedback via OpenRouter (%s)", settings.chat_model)
                 return parsed
+        except requests.exceptions.RequestException as req_err:
+            resp_text = ""
+            status_code = getattr(getattr(req_err, "response", None), "status_code", None)
+            if hasattr(req_err, "response") and req_err.response is not None:
+                resp_text = req_err.response.text[:300]
+            logger.warning("OpenRouter API request failed: %s (Status: %s, Body: %s)", req_err, status_code, resp_text)
+            continue
         except Exception as exc:
-            logger.debug("OpenRouter attempt failed: %s", exc)
+            logger.warning("OpenRouter attempt failed: %s", exc)
             continue
     return None
 
@@ -572,9 +595,14 @@ def generate_feedback(
 
     # 1. Primary path: OpenRouter if API key is configured
     if openrouter_key:
+        logger.info("JAM feedback using OpenRouter key (%s...). Model: %s", openrouter_key[:10], settings.chat_model)
         parsed = _call_openrouter(prompt, openrouter_key)
         if not parsed:
-            logger.warning("OpenRouter failed for JAM feedback. Attempting local Ollama fallback...")
+            logger.warning("OpenRouter evaluation failed or returned invalid response. Attempting local Ollama fallback...")
+    else:
+        logger.warning(
+            "JAM feedback: No OPENROUTER_API_KEY found in settings or backend/.env! Falling back to local Ollama..."
+        )
 
     # 2. Secondary path: Local Ollama fallback if OpenRouter not configured or failed
     if not parsed:

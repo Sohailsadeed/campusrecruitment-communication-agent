@@ -1,4 +1,4 @@
-I wante"""JAM & Multimodal LLM-backed feedback evaluation via OpenRouter with Ollama fallback."""
+"""JAM & Multimodal LLM-backed feedback evaluation via OpenRouter with Ollama fallback."""
 from __future__ import annotations
 
 import json

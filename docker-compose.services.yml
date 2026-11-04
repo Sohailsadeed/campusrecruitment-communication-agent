@@ -12,10 +12,10 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: speakflow_pre_websocket_postgres
+    container_name: speakflow_postgres
     restart: unless-stopped
     ports:
-      - "5433:5432"
+      - "5432:5432"
     environment:
       POSTGRES_USER: speakflow
       POSTGRES_PASSWORD: speakflow
@@ -30,10 +30,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: speakflow_pre_websocket_redis
+    container_name: speakflow_redis
     restart: unless-stopped
     ports:
-      - "6380:6379"
+      - "6379:6379"
     volumes:
       - speakflow_redisdata:/data
     healthcheck:
@@ -44,10 +44,10 @@ services:
 
   chromadb:
     image: chromadb/chroma:latest
-    container_name: speakflow_pre_websocket_chromadb
+    container_name: speakflow_chromadb
     restart: unless-stopped
     ports:
-      - "8101:8000"
+      - "8100:8000"
     environment:
       - ANONYMIZED_TELEMETRY=false
     volumes:

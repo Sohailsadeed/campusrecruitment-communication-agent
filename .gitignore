@@ -34,3 +34,5 @@ backend/instance/
 .vite/
 frontend/.vite/
 backend/cleaned.json
+
+.cadra/

@@ -37,10 +37,13 @@ def _get_llm():
                 temperature=0.7,
             )
         else:
-            logger.info("OpenRouter key not found. Using local Ollama fallback: %s at %s", settings.ollama_model, settings.ollama_base_url)
-            from langchain_community.chat_models import ChatOllama
-            _llm = ChatOllama(
-                base_url=settings.ollama_base_url,
+            ollama_api_base = settings.ollama_base_url.rstrip("/")
+            if not ollama_api_base.endswith("/v1"):
+                ollama_api_base = f"{ollama_api_base}/v1"
+            logger.info("OpenRouter key not found. Using local Ollama via OpenAI-compatible endpoint: %s at %s", settings.ollama_model, ollama_api_base)
+            _llm = ChatOpenAI(
+                base_url=ollama_api_base,
+                api_key="ollama",
                 model=settings.ollama_model,
                 temperature=0.7,
             )

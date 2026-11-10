@@ -34,6 +34,10 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "https://moistness-rigor-epiphany.ngrok-free.dev",
+        "https://moistness-rigor-epiphany.ngrok-free.app",
     ]
 
     # File uploads
@@ -51,7 +55,7 @@ class Settings(BaseSettings):
     # Technical Round (OpenRouter Nemotron / Ollama fallback, Redis, ChromaDB)
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    chat_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    chat_model: str = "openrouter/free"
     redis_url: str = "redis://localhost:6379"
     chroma_host: str = "localhost"
     chroma_port: int = 8100

@@ -28,6 +28,8 @@ TECH_CORRECTIONS: List[Tuple[re.Pattern, str]] = [
     (re.compile(r"\brest\s+apis?\b", re.IGNORECASE), "REST API"),
     (re.compile(r"\bpost\s+gress?\b", re.IGNORECASE), "PostgreSQL"),
     (re.compile(r"\bdev\s+ops\b", re.IGNORECASE), "DevOps"),
+    (re.compile(r"\b(?:elite\s+code|lead\s+code|leaf\s+code|late\s+code)\b", re.IGNORECASE), "LeetCode"),
+    (re.compile(r"\b(?:d\s*s\s*f|d\s*s\s*a)\b", re.IGNORECASE), "DSA"),
 ]
 
 
@@ -124,9 +126,15 @@ def _calculate_pauses(
 
 def transcribe_audio(
     audio_path: Optional[Path],
-    model_name: str = "small",
+    model_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Transcribe an audio file with verbatim hesitation capture and pause analysis."""
+    if model_name is None:
+        try:
+            from config import settings
+            model_name = settings.whisper_model_name
+        except Exception:
+            model_name = "small"
     if audio_path is not None and Path(audio_path).exists():
         # 1. Primary: Faster-Whisper with word_timestamps
         if _FASTER_WHISPER_AVAILABLE:
@@ -199,9 +207,9 @@ def transcribe_audio(
         # 2. Secondary fallback: OpenAI Whisper
         if _OPENAI_WHISPER_AVAILABLE:
             try:
-                if "base" not in _OW_MODEL_CACHE:
-                    _OW_MODEL_CACHE["base"] = whisper.load_model("base")
-                ow_model = _OW_MODEL_CACHE["base"]
+                if model_name not in _OW_MODEL_CACHE:
+                    _OW_MODEL_CACHE[model_name] = whisper.load_model(model_name)
+                ow_model = _OW_MODEL_CACHE[model_name]
                 result = ow_model.transcribe(
                     str(audio_path),
                     language="en",
